@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/NoPdf.App/NoPdf.App.csproj" />
+    <Project Path="src/NoPdf.Core/NoPdf.Core.csproj" />
+  </Folder>
+</Solution>

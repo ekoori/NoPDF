@@ -1,0 +1,37 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NoPdf.App.ViewModels"
+             xmlns:sys="using:System"
+             x:Class="NoPdf.App.Views.CommandBar"
+             x:DataType="vm:CommandBarViewModel"
+             IsVisible="{Binding IsVisible}">
+    <Border Background="#1E1E1E" Padding="8,4">
+        <DockPanel>
+            <!-- Command history (most recent first) -->
+            <ListBox DockPanel.Dock="Top" x:Name="HistoryList"
+                     ItemsSource="{Binding History}" MaxHeight="150"
+                     Background="Transparent" BorderThickness="0"
+                     Margin="0,0,0,4" SelectionChanged="OnHistoryPick"
+                     IsVisible="{Binding History.Count}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="sys:String">
+                        <TextBlock Text="{Binding}" Foreground="#9DB8C9"
+                                   FontFamily="Cascadia Code,Consolas,monospace" FontSize="12"/>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="{Binding Prompt}" Foreground="#7FD4FF"
+                           FontFamily="Cascadia Code,Consolas,monospace" FontSize="14"
+                           VerticalAlignment="Center"/>
+                <TextBox x:Name="Input" Text="{Binding Text, Mode=TwoWay}"
+                         BorderThickness="0" Background="Transparent"
+                         Foreground="#EEEEEE" CaretBrush="#EEEEEE"
+                         FontFamily="Cascadia Code,Consolas,monospace" FontSize="14"
+                         Padding="0" MinWidth="600"
+                         VerticalAlignment="Center"/>
+            </StackPanel>
+        </DockPanel>
+    </Border>
+</UserControl>

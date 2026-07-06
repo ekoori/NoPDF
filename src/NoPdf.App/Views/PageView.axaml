@@ -1,0 +1,28 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NoPdf.App.ViewModels"
+             xmlns:views="using:NoPdf.App.Views"
+             x:Class="NoPdf.App.Views.PageView"
+             x:DataType="vm:PageViewModel"
+             Focusable="True"
+             HorizontalAlignment="Center">
+    <Border x:Name="PageArea"
+            Background="White"
+            BorderBrush="#D0D0D0" BorderThickness="1"
+            BoxShadow="0 2 10 0 #33000000"
+            Margin="0,0,0,18"
+            Width="{Binding DisplayWidth}"
+            Height="{Binding DisplayHeight}">
+        <Panel>
+            <Image Source="{Binding Bitmap}" Stretch="Fill"
+                   RenderOptions.BitmapInterpolationMode="HighQuality"/>
+            <views:PageOverlay x:Name="Overlay"/>
+            <Canvas x:Name="EditLayer">
+                <TextBox x:Name="TextEditor" IsVisible="False"
+                         AcceptsReturn="True" TextWrapping="Wrap"
+                         Background="#FFFFF3" BorderBrush="#0078D7" BorderThickness="1"
+                         Padding="2" FontSize="12"/>
+            </Canvas>
+        </Panel>
+    </Border>
+</UserControl>

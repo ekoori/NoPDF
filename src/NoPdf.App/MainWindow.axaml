@@ -1,0 +1,361 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:NoPdf.App.ViewModels"
+        xmlns:ed="using:NoPdf.App.Editing"
+        xmlns:views="using:NoPdf.App.Views"
+        xmlns:conv="using:NoPdf.App.Converters"
+        xmlns:sys="using:System"
+        mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="720"
+        x:Class="NoPdf.App.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        x:Name="Root"
+        Width="1100" Height="720"
+        Title="NoPdf">
+
+    <Window.Resources>
+        <conv:EnumEqualsConverter x:Key="EnumEq"/>
+    </Window.Resources>
+
+    <Window.Styles>
+        <Style Selector="Button.tool">
+            <Setter Property="Width" Value="34"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#E6E6E6"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.tool PathIcon">
+            <Setter Property="Width" Value="17"/>
+            <Setter Property="Height" Value="17"/>
+            <Setter Property="Foreground" Value="#E6E6E6"/>
+        </Style>
+        <Style Selector="Button.tool:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#3E3E42"/>
+        </Style>
+        <!-- Active tool: highlighted background + bright icon -->
+        <Style Selector="Button.tool.active /template/ ContentPresenter">
+            <Setter Property="Background" Value="#0E639C"/>
+        </Style>
+        <Style Selector="Button.tool.active PathIcon">
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <!-- Smaller, tighter tabs -->
+        <Style Selector="TabItem">
+            <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="8,2"/>
+        </Style>
+        <!-- Page list: strip selection chrome so pages read as a document -->
+        <Style Selector="ListBox.pages > ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        </Style>
+        <Style Selector="ListBox.pages > ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ListBox.pages > ListBoxItem:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.tabclose">
+            <Setter Property="Width" Value="16"/>
+            <Setter Property="Height" Value="16"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.pageop">
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.pageop PathIcon">
+            <Setter Property="Width" Value="15"/>
+            <Setter Property="Height" Value="15"/>
+        </Style>
+        <Style Selector="Button.recent">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+        <!-- Dark side panels -->
+        <Style Selector="Border.sidepanel TextBlock">
+            <Setter Property="Foreground" Value="#DDDDDD"/>
+        </Style>
+        <Style Selector="Border.sidepanel TextBlock.muted">
+            <Setter Property="Foreground" Value="#8C9298"/>
+        </Style>
+        <Style Selector="Border.sidepanel Button.pageop PathIcon">
+            <Setter Property="Foreground" Value="#DDDDDD"/>
+        </Style>
+        <Style Selector="Border.sidepanel Button.pageop:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#3E3E42"/>
+        </Style>
+    </Window.Styles>
+
+    <DockPanel LastChildFill="True">
+
+        <!-- ===== Toolbar ===== -->
+        <Border DockPanel.Dock="Top" Background="#2D2D30" BorderBrush="#1E1E1E"
+                BorderThickness="0,0,0,1" Padding="8,5">
+            <StackPanel Orientation="Horizontal" Spacing="3">
+                <Button Classes="tool" ToolTip.Tip="Open (Ctrl+O)" Command="{Binding OpenCommand}">
+                    <PathIcon Data="{StaticResource IconOpen}"/></Button>
+                <Button Classes="tool" ToolTip.Tip="Save annotations (Ctrl+S)"
+                        Command="{Binding SaveCommand}">
+                    <PathIcon Data="{StaticResource IconSave}"/></Button>
+                <Button Classes="tool" ToolTip.Tip="Print" Command="{Binding PrintCommand}">
+                    <PathIcon Data="{StaticResource IconPrint}"/></Button>
+                <Button Classes="tool" ToolTip.Tip="Undo (Ctrl+Z)" Command="{Binding UndoCommand}">
+                    <PathIcon Data="{StaticResource IconUndo}"/></Button>
+                <Button Classes="tool" ToolTip.Tip="Redo (Ctrl+Y)" Command="{Binding RedoCommand}">
+                    <PathIcon Data="{StaticResource IconRedo}"/></Button>
+                <Button Classes="tool" ToolTip.Tip="Pages panel"
+                        Command="{Binding ToggleThumbnailsCommand}"
+                        Classes.active="{Binding IsThumbnailsPanelOpen}">
+                    <PathIcon Data="{StaticResource IconPages}"/></Button>
+                <Button Classes="tool" ToolTip.Tip="Bookmarks panel"
+                        Command="{Binding ToggleBookmarksCommand}"
+                        Classes.active="{Binding IsBookmarksPanelOpen}">
+                    <PathIcon Data="{StaticResource IconBookmark}"/></Button>
+                <Border Width="1" Background="#4A4A4A" Margin="5,2"/>
+
+                <Button Classes="tool" ToolTip.Tip="Hand / pan"
+                        Command="{Binding SelectToolCommand}" CommandParameter="{x:Static ed:EditorTool.Hand}"
+                        Classes.active="{Binding SelectedTab.CurrentTool, Converter={StaticResource EnumEq}, ConverterParameter={x:Static ed:EditorTool.Hand}}">
+                    <PathIcon Data="{StaticResource IconHand}"/></Button>
+                <Button Classes="tool" ToolTip.Tip="Select text"
+                        Command="{Binding SelectToolCommand}" CommandParameter="{x:Static ed:EditorTool.Select}"
+                        Classes.active="{Binding SelectedTab.CurrentTool, Converter={StaticResource EnumEq}, ConverterParameter={x:Static ed:EditorTool.Select}}">
+                    <PathIcon Data="{StaticResource IconSelect}"/></Button>
+                <Button Classes="tool" ToolTip.Tip="Zoom tool"
+                        Command="{Binding SelectToolCommand}" CommandParameter="{x:Static ed:EditorTool.Zoom}"
+                        Classes.active="{Binding SelectedTab.CurrentTool, Converter={StaticResource EnumEq}, ConverterParameter={x:Static ed:EditorTool.Zoom}}">
+                    <PathIcon Data="{StaticResource IconZoom}"/></Button>
+                <Border Width="1" Background="#4A4A4A" Margin="5,2"/>
+
+                <Button Classes="tool" ToolTip.Tip="Highlight"
+                        Command="{Binding SelectToolCommand}" CommandParameter="{x:Static ed:EditorTool.Highlight}"
+                        Classes.active="{Binding SelectedTab.CurrentTool, Converter={StaticResource EnumEq}, ConverterParameter={x:Static ed:EditorTool.Highlight}}">
+                    <PathIcon Data="{StaticResource IconHighlight}"/></Button>
+                <Button Classes="tool" ToolTip.Tip="Sticky note"
+                        Command="{Binding SelectToolCommand}" CommandParameter="{x:Static ed:EditorTool.Note}"
+                        Classes.active="{Binding SelectedTab.CurrentTool, Converter={StaticResource EnumEq}, ConverterParameter={x:Static ed:EditorTool.Note}}">
+                    <PathIcon Data="{StaticResource IconNote}"/></Button>
+                <Button Classes="tool" ToolTip.Tip="Text box"
+                        Command="{Binding SelectToolCommand}" CommandParameter="{x:Static ed:EditorTool.TextBox}"
+                        Classes.active="{Binding SelectedTab.CurrentTool, Converter={StaticResource EnumEq}, ConverterParameter={x:Static ed:EditorTool.TextBox}}">
+                    <PathIcon Data="{StaticResource IconTextBox}"/></Button>
+                <Button Classes="tool" ToolTip.Tip="Callout"
+                        Command="{Binding SelectToolCommand}" CommandParameter="{x:Static ed:EditorTool.Callout}"
+                        Classes.active="{Binding SelectedTab.CurrentTool, Converter={StaticResource EnumEq}, ConverterParameter={x:Static ed:EditorTool.Callout}}">
+                    <PathIcon Data="{StaticResource IconCallout}"/></Button>
+                <Button Classes="tool" ToolTip.Tip="Line"
+                        Command="{Binding SelectToolCommand}" CommandParameter="{x:Static ed:EditorTool.Line}"
+                        Classes.active="{Binding SelectedTab.CurrentTool, Converter={StaticResource EnumEq}, ConverterParameter={x:Static ed:EditorTool.Line}}">
+                    <PathIcon Data="{StaticResource IconLine}"/></Button>
+                <Button Classes="tool" ToolTip.Tip="Rectangle"
+                        Command="{Binding SelectToolCommand}" CommandParameter="{x:Static ed:EditorTool.Rectangle}"
+                        Classes.active="{Binding SelectedTab.CurrentTool, Converter={StaticResource EnumEq}, ConverterParameter={x:Static ed:EditorTool.Rectangle}}">
+                    <PathIcon Data="{StaticResource IconRectangle}"/></Button>
+                <Button Classes="tool" ToolTip.Tip="Arrow"
+                        Command="{Binding SelectToolCommand}" CommandParameter="{x:Static ed:EditorTool.Arrow}"
+                        Classes.active="{Binding SelectedTab.CurrentTool, Converter={StaticResource EnumEq}, ConverterParameter={x:Static ed:EditorTool.Arrow}}">
+                    <PathIcon Data="{StaticResource IconArrow}"/></Button>
+                <Button Classes="tool" ToolTip.Tip="Polyline"
+                        Command="{Binding SelectToolCommand}" CommandParameter="{x:Static ed:EditorTool.Polyline}"
+                        Classes.active="{Binding SelectedTab.CurrentTool, Converter={StaticResource EnumEq}, ConverterParameter={x:Static ed:EditorTool.Polyline}}">
+                    <PathIcon Data="{StaticResource IconPolyline}"/></Button>
+                <Border Width="1" Background="#4A4A4A" Margin="5,2"/>
+
+                <Button Classes="tool" ToolTip.Tip="Zoom out"
+                        Command="{Binding SelectedTab.ZoomOutCommand}">
+                    <PathIcon Data="{StaticResource IconZoomOut}"/></Button>
+                <TextBlock Text="{Binding SelectedTab.ZoomPercent, StringFormat='{}{0}%'}"
+                           Foreground="#DDDDDD" VerticalAlignment="Center" MinWidth="42" TextAlignment="Center"/>
+                <Button Classes="tool" ToolTip.Tip="Zoom in"
+                        Command="{Binding SelectedTab.ZoomInCommand}">
+                    <PathIcon Data="{StaticResource IconZoomIn}"/></Button>
+                <Button Classes="tool" ToolTip.Tip="Reset zoom"
+                        Command="{Binding SelectedTab.ZoomResetCommand}">
+                    <PathIcon Data="{StaticResource IconZoomReset}"/></Button>
+                <Border Width="1" Background="#4A4A4A" Margin="5,2"/>
+
+                <Button Classes="tool" ToolTip.Tip="Command line (:)" Click="OnCommandButtonClick">
+                    <PathIcon Data="{StaticResource IconCommand}"/></Button>
+            </StackPanel>
+        </Border>
+
+        <!-- ===== Status bar (very bottom) ===== -->
+        <Border DockPanel.Dock="Bottom" Background="#F3F3F3" BorderBrush="#DADADA"
+                BorderThickness="0,1,0,0" Padding="10,3">
+            <TextBlock Text="{Binding StatusText}" FontSize="12" Foreground="#555"/>
+        </Border>
+
+        <!-- ===== Command bar (above status bar) ===== -->
+        <views:CommandBar DockPanel.Dock="Bottom" DataContext="{Binding CommandBar}"/>
+
+        <!-- ===== Which-key hint (above command bar) ===== -->
+        <Border DockPanel.Dock="Bottom" Background="#252526" BorderBrush="#1E1E1E"
+                BorderThickness="0,1,0,0" Padding="10,5"
+                IsVisible="{Binding IsWhichKeyVisible}">
+            <ItemsControl ItemsSource="{Binding WhichKeyItems}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="sys:String">
+                        <Border Background="#37373D" CornerRadius="3" Padding="7,2" Margin="0,0,6,3">
+                            <TextBlock Text="{Binding}" Foreground="#DDDDDD"
+                                       FontFamily="Cascadia Code,Consolas,monospace" FontSize="12"/>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Border>
+
+        <!-- ===== Main area ===== -->
+        <Grid ColumnDefinitions="Auto,*,Auto">
+
+            <!-- Bookmarks / outline panel -->
+            <Border Grid.Column="0" Classes="sidepanel" Width="260" Background="#2D2D30"
+                    BorderBrush="#1E1E1E" BorderThickness="0,0,1,0"
+                    IsVisible="{Binding IsBookmarksPanelOpen}">
+                <DockPanel Margin="0">
+                    <TextBlock DockPanel.Dock="Top" Classes="muted" Text="BOOKMARKS" FontSize="11" FontWeight="SemiBold"
+                               Margin="12,10,12,6"/>
+                    <ScrollViewer>
+                        <StackPanel Margin="4,0,4,8">
+                            <TreeView x:Name="OutlineTree"
+                                      ItemsSource="{Binding SelectedTab.Outline}"
+                                      SelectionChanged="OnOutlineSelected"
+                                      Background="Transparent">
+                                <TreeView.ItemTemplate>
+                                    <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="vm:BookmarkNode">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Text="{Binding Title}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Grid.Column="1" Classes="muted" Text="{Binding PageLabel}"
+                                                       FontSize="11" Margin="6,0,0,0"/>
+                                        </Grid>
+                                    </TreeDataTemplate>
+                                </TreeView.ItemTemplate>
+                            </TreeView>
+
+                            <TextBlock Classes="muted" Text="No outline in this PDF" FontSize="11"
+                                       Margin="10,8" IsVisible="{Binding !SelectedTab.HasOutline}"/>
+
+                            <TextBlock Classes="muted" Text="MY BOOKMARKS" FontSize="11" FontWeight="SemiBold"
+                                       Margin="8,14,8,4"
+                                       IsVisible="{Binding SelectedTab.UserBookmarks.Count}"/>
+                            <ListBox x:Name="UserBookmarksList"
+                                     ItemsSource="{Binding SelectedTab.UserBookmarks}"
+                                     SelectionChanged="OnUserBookmarkSelected"
+                                     Background="Transparent">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:BookmarkNode">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Text="{Binding Title}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Grid.Column="1" Classes="muted" Text="{Binding PageLabel}"
+                                                       FontSize="11" Margin="6,0,0,0"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <Panel Grid.Column="1">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12"
+                        IsVisible="{Binding !HasDocument}">
+                <PathIcon Data="{StaticResource IconOpen}" Width="56" Height="56" Opacity="0.35"/>
+                <TextBlock Text="No document open" FontSize="18" HorizontalAlignment="Center"
+                           Foreground="#777"/>
+                <Button Content="Open a PDF…" Padding="14,6" HorizontalAlignment="Center"
+                        Command="{Binding OpenCommand}"/>
+                <TextBlock Text="Tip: press : for the command line, / to find"
+                           FontSize="12" HorizontalAlignment="Center" Foreground="#999"/>
+                <Border Width="360" Margin="0,8,0,0" IsVisible="{Binding HasRecent}">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Recent" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="#888" Margin="8,0,0,2"/>
+                        <ItemsControl ItemsSource="{Binding RecentFiles}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="sys:String">
+                                    <Button Classes="recent" Content="{Binding}"
+                                            Click="OnRecentClick"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <TabControl ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}"
+                        IsVisible="{Binding HasDocument}" Padding="0">
+                <TabControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DocumentViewModel">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding Title}" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBlock Text="●" Foreground="#E08000" FontSize="10"
+                                       VerticalAlignment="Center" IsVisible="{Binding IsDirty}"
+                                       ToolTip.Tip="Unsaved annotations"/>
+                            <Button Classes="tabclose" Content="✕"
+                                    Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CloseTabCommand}"
+                                    CommandParameter="{Binding}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </TabControl.ItemTemplate>
+                <TabControl.ContentTemplate>
+                    <DataTemplate x:DataType="vm:DocumentViewModel">
+                        <views:DocumentView/>
+                    </DataTemplate>
+                </TabControl.ContentTemplate>
+            </TabControl>
+            </Panel>
+
+            <!-- Thumbnails / pages panel -->
+            <Border Grid.Column="2" Classes="sidepanel" Width="196" Background="#2D2D30"
+                    BorderBrush="#1E1E1E" BorderThickness="1,0,0,0"
+                    IsVisible="{Binding IsThumbnailsPanelOpen}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Classes="muted" Text="PAGES" FontSize="11" FontWeight="SemiBold"
+                               Margin="12,10,12,6"/>
+                    <Border DockPanel.Dock="Top" BorderBrush="#1E1E1E" BorderThickness="0,0,0,1" Padding="6,2">
+                        <StackPanel Orientation="Horizontal" Spacing="1">
+                            <Button Classes="pageop" ToolTip.Tip="Rotate left" Click="OnThumbRotateLeft">
+                                <PathIcon Data="{StaticResource IconRotateLeft}"/></Button>
+                            <Button Classes="pageop" ToolTip.Tip="Rotate right" Click="OnThumbRotateRight">
+                                <PathIcon Data="{StaticResource IconRotateRight}"/></Button>
+                            <Button Classes="pageop" ToolTip.Tip="Move up" Click="OnThumbMoveUp">
+                                <PathIcon Data="{StaticResource IconMoveUp}"/></Button>
+                            <Button Classes="pageop" ToolTip.Tip="Move down" Click="OnThumbMoveDown">
+                                <PathIcon Data="{StaticResource IconMoveDown}"/></Button>
+                            <Button Classes="pageop" ToolTip.Tip="Insert PDF after" Click="OnThumbInsert">
+                                <PathIcon Data="{StaticResource IconInsert}"/></Button>
+                            <Button Classes="pageop" ToolTip.Tip="Delete page" Click="OnThumbDelete">
+                                <PathIcon Data="{StaticResource IconDelete}"/></Button>
+                        </StackPanel>
+                    </Border>
+                    <ListBox x:Name="ThumbList" ItemsSource="{Binding SelectedTab.Thumbnails}"
+                             SelectionChanged="OnThumbSelected" Background="Transparent">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:PageThumbnail">
+                                <views:ThumbnailView/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</Window>

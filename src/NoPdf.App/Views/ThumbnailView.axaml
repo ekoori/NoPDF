@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NoPdf.App.ViewModels"
+             x:Class="NoPdf.App.Views.ThumbnailView"
+             x:DataType="vm:PageThumbnail">
+    <StackPanel Spacing="3" Margin="4" HorizontalAlignment="Center">
+        <Border Background="White" BorderBrush="#C0C0C0" BorderThickness="1"
+                Width="{Binding DisplayWidth}" Height="{Binding DisplayHeight}">
+            <Image Source="{Binding Image}" Stretch="Fill"/>
+        </Border>
+        <TextBlock Text="{Binding PageNumber}" FontSize="11" Foreground="#BBBBBB"
+                   HorizontalAlignment="Center"/>
+    </StackPanel>
+</UserControl>
