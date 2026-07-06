@@ -153,7 +153,7 @@ public static class AnnotationWriter
         annot.Elements.SetString("/DA", $"/Helv {F(f.FontSize)} Tf {Col3(f.TextColor)} rg");
         annot.Elements.SetInteger("/Q", 0);
         annot.Elements["/AP"] = Appearance(doc, rc.Left, rc.Bottom, rc.Right, rc.Top,
-            FreeTextContent(f), withFont: true);
+            FreeTextContent(f), withFont: true, strokeAlpha: f.BorderOpacity);
     }
 
     private static void AddCallout(PdfDocument doc, PdfPage page, CalloutAnnotation c)
@@ -186,7 +186,7 @@ public static class AnnotationWriter
         sb.Append(F(attach.X)).Append(' ').Append(F(attach.Y)).Append(" l S\n");
         sb.Append(Arrowhead(c.Knee ?? new PdfPoint(attach.X, attach.Y), c.Tip, c.StrokeWidth));
         sb.Append(FreeTextContent(c));
-        annot.Elements["/AP"] = Appearance(doc, l, b, r, t, sb.ToString(), withFont: true);
+        annot.Elements["/AP"] = Appearance(doc, l, b, r, t, sb.ToString(), withFont: true, strokeAlpha: c.BorderOpacity);
     }
 
     private static string FreeTextContent(FreeTextAnnotation f)
@@ -196,8 +196,11 @@ public static class AnnotationWriter
         if (f.Border)
         {
             double w = Math.Max(1, f.StrokeWidth), inset = w / 2;
+            bool alpha = f.BorderOpacity < 0.999;
+            if (alpha) sb.Append("q /GSca gs\n");
             sb.Append(F(w)).Append(" w\n").Append(Col(f.Color, true));
             sb.Append(Re(rc.Left + inset, rc.Bottom + inset, rc.Width - w, rc.Height - w)).Append("S\n");
+            if (alpha) sb.Append("Q\n");
         }
         double pad = 3, leading = f.FontSize * 1.25;
         double x = rc.Left + pad, y = rc.Top - pad - f.FontSize;
@@ -263,7 +266,7 @@ public static class AnnotationWriter
     }
 
     private static PdfDictionary Appearance(PdfDocument doc, double l, double b, double r, double t,
-        string content, bool withFont = false, bool multiply = false)
+        string content, bool withFont = false, bool multiply = false, double strokeAlpha = 1.0)
     {
         var form = new PdfDictionary(doc);
         doc.Internals.AddObject(form);
@@ -279,6 +282,16 @@ public static class AnnotationWriter
             gs.Elements.SetName("/Type", "/ExtGState");
             gs.Elements.SetName("/BM", "/Multiply");
             var eg = new PdfDictionary(doc); eg.Elements["/GS0"] = gs;
+            res.Elements["/ExtGState"] = eg;
+        }
+        if (strokeAlpha < 0.999)
+        {
+            var gs = new PdfDictionary(doc);
+            gs.Elements.SetName("/Type", "/ExtGState");
+            gs.Elements.SetReal("/CA", strokeAlpha);
+            gs.Elements.SetReal("/ca", strokeAlpha);
+            var eg = res.Elements.GetDictionary("/ExtGState") ?? new PdfDictionary(doc);
+            eg.Elements["/GSca"] = gs;
             res.Elements["/ExtGState"] = eg;
         }
         if (withFont)

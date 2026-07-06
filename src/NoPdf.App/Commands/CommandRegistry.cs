@@ -73,6 +73,13 @@ public sealed class CommandRegistry
             ["fit"] = (_, _) => Task.FromResult(Fit(false)),
             ["fitwidth"] = (_, _) => Task.FromResult(Fit(true)),
             ["copy"] = (_, _) => { _main.RequestCopy(); return Msg(null); },
+            ["scrolldown"] = (_, _) => Scroll(0, +1),
+            ["scrollup"] = (_, _) => Scroll(0, -1),
+            ["scrollleft"] = (_, _) => Scroll(-1, 0),
+            ["scrollright"] = (_, _) => Scroll(+1, 0),
+            ["scrollpagedown"] = (_, _) => { Doc?.ScrollPage(+1); return Msg(null); },
+            ["scrollpageup"] = (_, _) => { Doc?.ScrollPage(-1); return Msg(null); },
+            ["delannot"] = (_, _) => { Doc?.DeleteSelectedAnnotation(); return Msg(null); },
             ["marks"] = (_, _) => Task.FromResult(ListMarks()),
             ["help"] = (_, _) => Task.FromResult<string?>("Commands: " + string.Join(", ", CommandNames())),
         };
@@ -91,6 +98,14 @@ public sealed class CommandRegistry
     {
         input = input.Trim();
         if (input.Length == 0) return null;
+
+        // Resolve a configured alias on the first word (single level).
+        {
+            int a = input.IndexOf(' ');
+            string first = a < 0 ? input : input[..a];
+            if (_main.Config.Aliases.TryGetValue(first, out var target) && !string.IsNullOrWhiteSpace(target))
+                input = a < 0 ? target : target + " " + input[(a + 1)..];
+        }
 
         // Split into command + argument remainder.
         int sp = input.IndexOf(' ');
@@ -343,6 +358,13 @@ public sealed class CommandRegistry
         if (Doc is null) return "No document";
         if (widthOnly) Doc.RequestFitWidth(); else Doc.RequestFitPage();
         return widthOnly ? "Fit width" : "Fit page";
+    }
+
+    private Task<string?> Scroll(int dx, int dy)
+    {
+        double step = Math.Max(1, _main.Config.ScrollRows) * 22.0;
+        Doc?.ScrollBy(dx * step, dy * step);
+        return Msg(null);
     }
 
     private async Task<string?> Save(string[] args, string rest)

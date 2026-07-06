@@ -106,10 +106,25 @@ public partial class PageView : UserControl
                 BeginDraw(new SquareAnnotation { PageIndex = _current.PageIndex, Rect = new TextRect(page.X, page.Y, page.X, page.Y) }, page, e);
                 break;
             case EditorTool.TextBox:
-                BeginDraw(new FreeTextAnnotation { PageIndex = _current.PageIndex, Rect = new TextRect(page.X, page.Y, page.X, page.Y), Color = AnnotColor.Blue }, page, e);
+                BeginDraw(new FreeTextAnnotation
+                {
+                    PageIndex = _current.PageIndex,
+                    Rect = new TextRect(page.X, page.Y, page.X, page.Y),
+                    Color = _current.Owner.TextboxFrameColor,
+                    FontSize = _current.Owner.TextboxFontSize,
+                    BorderOpacity = _current.Owner.TextboxFrameOpacity,
+                }, page, e);
                 break;
             case EditorTool.Callout:
-                BeginDraw(new CalloutAnnotation { PageIndex = _current.PageIndex, Tip = page, Rect = DefaultRectAt(page), Color = AnnotColor.Red }, page, e);
+                BeginDraw(new CalloutAnnotation
+                {
+                    PageIndex = _current.PageIndex,
+                    Tip = page,
+                    Rect = DefaultRectAt(page),
+                    Color = _current.Owner.TextboxFrameColor,
+                    FontSize = _current.Owner.TextboxFontSize,
+                    BorderOpacity = _current.Owner.TextboxFrameOpacity,
+                }, page, e);
                 break;
             case EditorTool.Note:
                 CreateNote(page, e);
@@ -257,6 +272,8 @@ public partial class PageView : UserControl
         var ann = _current.CommitDraft();
         if (ann is null) return;
         Owner!.SelectAnnotation(_current, ann);
+        // Switch to Select so the new annotation can be moved/resized immediately.
+        Owner.SelectTool(EditorTool.Select);
         if (ann is FreeTextAnnotation ft) OpenEditor(ft, isNew: true);
     }
 
@@ -265,6 +282,7 @@ public partial class PageView : UserControl
         var note = new StickyNoteAnnotation { PageIndex = _current!.PageIndex, Position = page, Contents = "" };
         _current.AddAnnotation(note);
         Owner!.SelectAnnotation(_current, note);
+        Owner.SelectTool(EditorTool.Select);
         OpenNoteEditor(note);
         e.Handled = true;
     }
@@ -298,7 +316,11 @@ public partial class PageView : UserControl
         if (_current!.Draft is PolylineAnnotation poly)
         {
             if (poly.Points.Count > 0) poly.Points.RemoveAt(poly.Points.Count - 1); // drop live point
-            if (poly.Points.Count >= 2) { _current.CommitDraft(); }
+            if (poly.Points.Count >= 2)
+            {
+                var ann = _current.CommitDraft();
+                if (ann is not null) { Owner!.SelectAnnotation(_current, ann); Owner.SelectTool(EditorTool.Select); }
+            }
             else _current.SetDraft(null);
         }
         _mode = Mode.None;

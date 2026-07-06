@@ -141,12 +141,15 @@ public class FreeTextAnnotation : PdfAnnotationModel
     public double FontSize { get; set; } = 12;
     public AnnotColor TextColor { get; set; } = AnnotColor.Black;
     public bool Border { get; set; } = true;
+    /// <summary>Frame opacity, 0 (transparent) .. 1 (solid).</summary>
+    public double BorderOpacity { get; set; } = 1.0;
     public override TextRect Bounds => Rect;
 
     protected void CopyFreeTextTo(FreeTextAnnotation c)
     {
         CopyBaseTo(c);
-        c.Rect = Rect; c.FontSize = FontSize; c.TextColor = TextColor; c.Border = Border;
+        c.Rect = Rect; c.FontSize = FontSize; c.TextColor = TextColor;
+        c.Border = Border; c.BorderOpacity = BorderOpacity;
     }
 
     public override PdfAnnotationModel Clone()

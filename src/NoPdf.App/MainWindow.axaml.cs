@@ -102,13 +102,14 @@ public partial class MainWindow : Window
     {
         // While the command bar is focused, let it handle everything.
         if (Vm.CommandBar.IsVisible) return;
+        // While editing annotation text, don't hijack keys.
+        if (FocusManager?.GetFocusedElement() is TextBox) return;
 
         bool ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        bool alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
 
-        bool inText = FocusManager?.GetFocusedElement() is TextBox;
-
-        // Ex-command triggers and normal-mode hotkeys (only when not typing text).
-        if (!ctrl && !inText)
+        // Command-line / search triggers and Escape (no modifiers).
+        if (!ctrl && !alt)
         {
             switch (e.Key)
             {
@@ -124,61 +125,87 @@ public partial class MainWindow : Window
                     else Vm.SelectedTab?.ClearActiveSelection();
                     e.Handled = true; return;
             }
-
-            // Multi-key hotkey dispatch.
-            string? token = KeyToken(e);
-            if (token is not null)
-            {
-                var result = Vm.KeyBindings.Feed(token);
-                switch (result.Kind)
-                {
-                    case KeyFeedKind.Execute:
-                        Vm.HideWhichKey(); e.Handled = true;
-                        await RunCommand(result.Command!);
-                        return;
-                    case KeyFeedKind.Pending:
-                        Vm.ShowWhichKey(result.Candidates); e.Handled = true; return;
-                    default:
-                        Vm.HideWhichKey();
-                        break;
-                }
-            }
         }
 
-        if (ctrl)
+        // Ctrl+F opens the search bar (a UI action, not a command).
+        if (ctrl && !alt && e.Key == Key.F)
         {
-            switch (e.Key)
+            Vm.HideWhichKey(); Vm.KeyBindings.Reset();
+            Vm.CommandBar.Open("/"); e.Handled = true; return;
+        }
+
+        // Normal-mode hotkey dispatch (supports modifiers + special keys).
+        string? token = KeyToken(e);
+        if (token is not null)
+        {
+            var result = Vm.KeyBindings.Feed(token);
+            switch (result.Kind)
             {
-                case Key.O: await Vm.OpenCommand.ExecuteAsync(null); e.Handled = true; break;
-                case Key.S: await Vm.SaveCommand.ExecuteAsync(null); e.Handled = true; break;
-                case Key.W: Vm.CloseTabCommand.Execute(null); e.Handled = true; break;
-                case Key.F: Vm.CommandBar.Open("/"); e.Handled = true; break;
-                case Key.C: await CopySelectionAsync(); e.Handled = true; break;
-                case Key.Z when e.KeyModifiers.HasFlag(KeyModifiers.Shift): Vm.SelectedTab?.Redo(); e.Handled = true; break;
-                case Key.Z: Vm.SelectedTab?.Undo(); e.Handled = true; break;
-                case Key.Y: Vm.SelectedTab?.Redo(); e.Handled = true; break;
-                case Key.OemPlus or Key.Add: Vm.SelectedTab?.ZoomInCommand.Execute(null); e.Handled = true; break;
-                case Key.OemMinus or Key.Subtract: Vm.SelectedTab?.ZoomOutCommand.Execute(null); e.Handled = true; break;
-                case Key.D0 or Key.NumPad0: Vm.SelectedTab?.ZoomResetCommand.Execute(null); e.Handled = true; break;
+                case KeyFeedKind.Execute:
+                    Vm.HideWhichKey(); e.Handled = true;
+                    await RunCommand(result.Command!);
+                    return;
+                case KeyFeedKind.Pending:
+                    Vm.ShowWhichKey(result.Candidates); e.Handled = true; return;
+                default:
+                    Vm.HideWhichKey();
+                    break;
             }
         }
+
+        // Keep the page focused: never let Tab move focus into the toolbar.
+        if (e.Key is Key.Tab) { e.Handled = true; return; }
     }
 
-    /// <summary>Maps a plain (no Ctrl/Alt) letter or digit key to a hotkey token.</summary>
+    private static readonly Dictionary<Key, string> SpecialKeys = new()
+    {
+        [Key.Up] = "up", [Key.Down] = "down", [Key.Left] = "left", [Key.Right] = "right",
+        [Key.PageUp] = "pageup", [Key.PageDown] = "pagedown",
+        [Key.Home] = "home", [Key.End] = "end",
+        [Key.Space] = "space", [Key.Tab] = "tab", [Key.Enter] = "cr",
+        [Key.Back] = "bs", [Key.Delete] = "del",
+    };
+
+    /// <summary>
+    /// Maps a key press to a binding token: a bare char for plain letters/digits,
+    /// or vim-style <c>&lt;c-r&gt;</c> / <c>&lt;a-left&gt;</c> / <c>&lt;up&gt;</c>
+    /// for modified or special keys. Returns null for pure modifier presses.
+    /// </summary>
     private static string? KeyToken(KeyEventArgs e)
     {
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Alt))
-            return null;
         var k = e.Key;
-        if (k >= Key.A && k <= Key.Z)
+        // Ignore standalone modifier presses.
+        if (k is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift
+              or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin or Key.System)
+            return null;
+
+        bool ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        bool alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
+        bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+
+        string? baseName = null;
+        if (k >= Key.A && k <= Key.Z) baseName = ((char)('a' + (k - Key.A))).ToString();
+        else if (k >= Key.D0 && k <= Key.D9) baseName = ((char)('0' + (k - Key.D0))).ToString();
+        else if (k >= Key.NumPad0 && k <= Key.NumPad9) baseName = ((char)('0' + (k - Key.NumPad0))).ToString();
+        else if (SpecialKeys.TryGetValue(k, out var s)) baseName = s;
+        if (baseName is null) return null;
+
+        bool isLetter = baseName.Length == 1 && baseName[0] is >= 'a' and <= 'z';
+
+        // Plain (no ctrl/alt): letters carry case via shift, others use <s-...>.
+        if (!ctrl && !alt)
         {
-            char c = (char)('a' + (k - Key.A));
-            return e.KeyModifiers.HasFlag(KeyModifiers.Shift)
-                ? char.ToUpperInvariant(c).ToString() : c.ToString();
+            if (isLetter) return shift ? baseName.ToUpperInvariant() : baseName;
+            if (!shift) return baseName.Length == 1 ? baseName : $"<{baseName}>";
+            return $"<s-{baseName}>";
         }
-        if (k >= Key.D0 && k <= Key.D9) return ((char)('0' + (k - Key.D0))).ToString();
-        if (k >= Key.NumPad0 && k <= Key.NumPad9) return ((char)('0' + (k - Key.NumPad0))).ToString();
-        return null;
+
+        // Modified: <c-…>, <a-…>, <c-a-s-…> etc.
+        var mods = new List<string>(3);
+        if (ctrl) mods.Add("c");
+        if (alt) mods.Add("a");
+        if (shift) mods.Add("s");
+        return $"<{string.Join('-', mods)}-{baseName}>";
     }
 
     private async Task RunCommand(string commandLine)

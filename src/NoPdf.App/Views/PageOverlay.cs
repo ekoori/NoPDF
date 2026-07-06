@@ -89,14 +89,14 @@ public sealed class PageOverlay : Control
                 else ctx.DrawLine(pen, tip, attach);
                 DrawArrowhead(ctx, color, c.Knee is { } kk ? P(kk) : attach, tip, a.StrokeWidth);
                 var rr = ToDip(c.Rect);
-                ctx.DrawRectangle(null, pen, rr);
+                ctx.DrawRectangle(null, FramePen(c, color), rr);
                 DrawText(ctx, c, rr);
                 break;
             }
             case FreeTextAnnotation f:
             {
                 var rr = ToDip(f.Rect);
-                if (f.Border) ctx.DrawRectangle(null, pen, rr);
+                if (f.Border) ctx.DrawRectangle(null, FramePen(f, color), rr);
                 DrawText(ctx, f, rr);
                 break;
             }
@@ -121,6 +121,13 @@ public sealed class PageOverlay : Control
                 break;
             }
         }
+    }
+
+    private IPen FramePen(FreeTextAnnotation f, Color color)
+    {
+        byte a = (byte)Math.Clamp((int)Math.Round(f.BorderOpacity * 255), 0, 255);
+        return new Pen(new SolidColorBrush(Color.FromArgb(a, color.R, color.G, color.B)),
+            Math.Max(1, f.StrokeWidth * _scale));
     }
 
     private void DrawText(DrawingContext ctx, FreeTextAnnotation f, Rect rect)

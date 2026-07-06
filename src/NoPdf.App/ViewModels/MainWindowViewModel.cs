@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -36,6 +37,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public Quickmarks Quickmarks { get; }
     public RecentFiles Recent { get; }
+    public SessionStore Session { get; }
+    private bool _restoring;
     public AppConfig Config { get; }
     public KeyBindingService KeyBindings { get; }
     public CommandRegistry Commands { get; }
@@ -56,9 +59,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public MainWindowViewModel()
     {
-        Tabs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasDocument));
+        Tabs.CollectionChanged += (_, _) => { OnPropertyChanged(nameof(HasDocument)); SaveSession(); };
         Quickmarks = new Quickmarks();
         Recent = new RecentFiles();
+        Session = new SessionStore();
         Config = AppConfig.Load(out string? cfgError);
         KeyBindings = new KeyBindingService(Config);
         Commands = new CommandRegistry(this, Quickmarks);
@@ -92,6 +96,35 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public void RequestQuit() => QuitRequested?.Invoke();
 
+    partial void OnSelectedTabChanged(DocumentViewModel? value) => SaveSession();
+
+    private void SaveSession()
+    {
+        if (_restoring) return;
+        Session.Save(new SessionStore.SessionData
+        {
+            Files = Tabs.Select(t => t.FilePath).ToList(),
+            Active = SelectedTab is not null ? Tabs.IndexOf(SelectedTab) : -1,
+        });
+    }
+
+    /// <summary>Reopens the files from the previous session.</summary>
+    public async Task RestoreSessionAsync()
+    {
+        var data = Session.Load();
+        if (data is null || data.Files.Count == 0) return;
+        _restoring = true;
+        try
+        {
+            foreach (var f in data.Files)
+                if (File.Exists(f)) await OpenPathAsync(f, forceNewTab: true);
+        }
+        finally { _restoring = false; }
+
+        if (data.Active >= 0 && data.Active < Tabs.Count) SelectedTab = Tabs[data.Active];
+        SaveSession();
+    }
+
     [RelayCommand]
     private async Task OpenAsync()
     {
@@ -118,6 +151,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         try
         {
             var doc = await DocumentViewModel.LoadAsync(path);
+            doc.TextboxFontSize = Config.TextboxFontSize;
+            doc.TextboxFrameColor = Config.TextboxFrameColorValue;
+            doc.TextboxFrameOpacity = Config.TextboxFrameOpacity;
             Tabs.Add(doc);
             SelectedTab = doc;
             Recent.Add(path);

@@ -29,22 +29,24 @@ public partial class DocumentView : UserControl
         PageList.AddHandler(PointerMovedEvent, OnPointerMoved, RoutingStrategies.Tunnel);
         PageList.AddHandler(PointerReleasedEvent, OnPointerReleased, RoutingStrategies.Tunnel);
         PageList.AddHandler(PointerWheelChangedEvent, OnPointerWheel, RoutingStrategies.Tunnel);
-        PageList.AddHandler(KeyDownEvent, OnPageKeyDown, RoutingStrategies.Bubble);
     }
 
-    private void OnPageKeyDown(object? sender, KeyEventArgs e)
+    private void OnScrollBy(double dx, double dy)
     {
-        if (_vm is null) return;
-        // Don't hijack keys while editing annotation text.
-        if (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is TextBox) return;
+        var sv = Scroll;
+        if (sv is null) return;
+        double maxX = Math.Max(0, sv.Extent.Width - sv.Viewport.Width);
+        double maxY = Math.Max(0, sv.Extent.Height - sv.Viewport.Height);
+        sv.Offset = new Vector(
+            Math.Clamp(sv.Offset.X + dx, 0, maxX),
+            Math.Clamp(sv.Offset.Y + dy, 0, maxY));
+    }
 
-        switch (e.Key)
-        {
-            case Key.PageDown or Key.Down or Key.Right: _vm.NextPage(); e.Handled = true; break;
-            case Key.PageUp or Key.Up or Key.Left: _vm.PrevPage(); e.Handled = true; break;
-            case Key.Home: _vm.FirstPage(); e.Handled = true; break;
-            case Key.End: _vm.LastPage(); e.Handled = true; break;
-        }
+    private void OnScrollPage(int dir)
+    {
+        var sv = Scroll;
+        if (sv is null) return;
+        OnScrollBy(0, dir * sv.Viewport.Height * 0.9);
     }
 
     private void HookScroll()
@@ -80,6 +82,8 @@ public partial class DocumentView : UserControl
             _vm.ScrollToPageRequested -= OnScrollToPage;
             _vm.FitWidthRequested -= OnFitWidth;
             _vm.FitPageRequested -= OnFitPage;
+            _vm.ScrollByRequested -= OnScrollBy;
+            _vm.ScrollPageRequested -= OnScrollPage;
         }
         _vm = DataContext as DocumentViewModel;
         if (_vm is not null)
@@ -88,6 +92,8 @@ public partial class DocumentView : UserControl
             _vm.ScrollToPageRequested += OnScrollToPage;
             _vm.FitWidthRequested += OnFitWidth;
             _vm.FitPageRequested += OnFitPage;
+            _vm.ScrollByRequested += OnScrollBy;
+            _vm.ScrollPageRequested += OnScrollPage;
             ApplyDpi();
         }
         UpdateCursor();
@@ -97,7 +103,7 @@ public partial class DocumentView : UserControl
     {
         base.OnAttachedToVisualTree(e);
         ApplyDpi();
-        Dispatcher.UIThread.Post(HookScroll, DispatcherPriority.Loaded);
+        Dispatcher.UIThread.Post(() => { HookScroll(); PageList.Focus(); }, DispatcherPriority.Loaded);
     }
 
     private void ApplyDpi()

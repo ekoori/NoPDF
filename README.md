@@ -73,14 +73,21 @@ Three ways to trigger a command (qutebrowser/vim style):
 
 The `:` command line shows a **history** of previous commands (click to reuse,
 ↑/↓ to cycle). Bindings and app parameters live in a YAML config written on
-first run to `%APPDATA%/NoPdf/config.yaml` (`~/.config` equivalent on other
-platforms) — edit it to remap any built-in command to any key sequence.
+first run to `%APPDATA%/NoPdf/config.yaml` — it lists **every** command and lets
+you remap any of them. Keys support modifiers and special keys
+(`<c-r>`, `<a-x>`, `<c-s-p>`, `<up>`, `<pagedown>`, …) and an `aliases:` section
+(so `:w` runs `save`). Text-box defaults (font size, frame colour, frame
+opacity) are configurable too.
 
-**Default hotkeys:** `hl` highlight · `gg`/`G` first/last page · `J`/`K`
-next/prev page · `T` open in new tab · `gt`/`gT` next/prev tab · `X` close tab ·
-`u`/`U` undo/redo · `zi`/`zo`/`zz` zoom in/out/reset · `zw`/`zp` fit width/page ·
-`b` bookmarks · `P` pages panel · `yy` copy. **Page nav:** PageUp/PageDown,
-arrows, Home/End.
+The app **remembers your open tabs** — order and active tab — and restores them
+on the next launch (unless you open a file directly).
+
+**Default hotkeys:** `hl` highlight · `gg`/`G` first/last page · `j`/`k` +
+arrows scroll · `<pageup>`/`<pagedown>` page scroll · `H`/`L` (and `gt`/`gT`)
+prev/next tab · `T` new tab · `X` close tab · `u`/`U` (or `<c-z>`/`<c-r>`)
+undo/redo · `d` delete annotation · `zi`/`zo`/`zz` zoom · `zw`/`zp` fit
+width/page · `b` bookmarks · `P` pages · `yy` copy. In normal mode focus stays
+on the page (no Tab-cycling through the toolbar).
 
 ### Command reference
 
@@ -104,7 +111,10 @@ arrows, Home/End.
 | `insert <path> [at]` / `merge <path>` | | `merge b.pdf` | Insert / append another PDF |
 | `extract <range> <path>` | | `extract 1-3 out.pdf` | Export pages to a new PDF |
 | `zoom width` / `zoom page` | | | Fit width / whole page |
-| `undo` / `redo` | | | Undo / redo |
+| `scrollup`/`scrolldown`/`scrollleft`/`scrollright` | | | Scroll by a few rows |
+| `scrollpageup` / `scrollpagedown` | | | Scroll by a viewport |
+| `delannot` | | | Delete the selected annotation |
+| `undo` / `redo` | | | Undo / redo (annotations, pages, bookmarks) |
 | `close` / `quit` | `q` / `qa` | | Close tab / exit |
 
 Keyboard: `Ctrl+O` open · `Ctrl+S` save · `Ctrl+F` find · `Ctrl+C` copy

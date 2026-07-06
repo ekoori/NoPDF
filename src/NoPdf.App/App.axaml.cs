@@ -22,17 +22,20 @@ public partial class App : Application
             var window = new MainWindow();
             desktop.MainWindow = window;
 
-            // Open any .pdf paths passed on the command line ("Open with…").
+            // Open any .pdf paths passed on the command line ("Open with…"),
+            // otherwise restore the previous session's tabs.
             var args = desktop.Args ?? System.Array.Empty<string>();
             var pdfs = args.Where(a => File.Exists(a) &&
                                        a.EndsWith(".pdf", System.StringComparison.OrdinalIgnoreCase))
                            .ToArray();
-            if (pdfs.Length > 0 && window.DataContext is MainWindowViewModel vm)
+            if (window.DataContext is MainWindowViewModel vm)
             {
                 Dispatcher.UIThread.Post(async () =>
                 {
-                    foreach (var p in pdfs)
-                        await vm.OpenPathAsync(p);
+                    if (pdfs.Length > 0)
+                        foreach (var p in pdfs) await vm.OpenPathAsync(p);
+                    else
+                        await vm.RestoreSessionAsync();
                 });
             }
         }

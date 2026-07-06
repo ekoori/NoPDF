@@ -40,6 +40,11 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     private double _zoom = 1.0;
     private PageViewModel? _activeSelectionPage;
 
+    // Text-box annotation defaults (from config).
+    public double TextboxFontSize { get; set; } = 14;
+    public AnnotColor TextboxFrameColor { get; set; } = AnnotColor.Blue;
+    public double TextboxFrameOpacity { get; set; } = 1.0;
+
     /// <summary>Device pixel ratio for crisp rendering on HiDPI displays.</summary>
     public double DpiScale { get; private set; } = 1.0;
 
@@ -61,6 +66,13 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public event Action<int>? ScrollToPageRequested;
     public event Action? FitWidthRequested;
     public event Action? FitPageRequested;
+    /// <summary>Scroll the viewport by (dx, dy) device-independent pixels.</summary>
+    public event Action<double, double>? ScrollByRequested;
+    /// <summary>Scroll by a viewport page: +1 down, -1 up.</summary>
+    public event Action<int>? ScrollPageRequested;
+
+    public void ScrollBy(double dx, double dy) => ScrollByRequested?.Invoke(dx, dy);
+    public void ScrollPage(int dir) => ScrollPageRequested?.Invoke(dir);
 
     private DocumentViewModel(PdfDocument document, string filePath, byte[] workingBytes,
         IReadOnlyList<OutlineItem> outline, List<PdfAnnotationModel> annotations)
