@@ -35,16 +35,25 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// <summary>Set by the view; opens a single PDF (for insert/merge).</summary>
     public Func<Task<string?>>? OpenSingleFilePicker { get; set; }
 
-    /// <summary>Set by the view; prompts for a "Save As" destination path.</summary>
-    public Func<Task<string?>>? SaveAsPicker { get; set; }
+    /// <summary>Set by the view; prompts for a destination path (suggested dir + name).</summary>
+    public Func<string?, string?, Task<string?>>? SaveAsPicker { get; set; }
+
+    public Task<string?> PickSaveAs(string? dir, string? name)
+        => SaveAsPicker is not null ? SaveAsPicker(dir, name) : Task.FromResult<string?>(null);
 
     public Quickmarks Quickmarks { get; }
     public RecentFiles Recent { get; }
     public SessionStore Session { get; }
     public ViewStateStore ViewStates { get; } = new();
     private bool _restoring;
-    public AppConfig Config { get; }
-    public KeyBindingService KeyBindings { get; }
+    public AppConfig Config { get; private set; }
+    public KeyBindingService KeyBindings { get; private set; }
+
+    /// <summary>Recently closed tabs (path + original index) for reopen/undo.</summary>
+    private readonly Stack<(string Path, int Index)> _closedTabs = new();
+
+    /// <summary>Raised after the config file is hot-reloaded so the view can re-apply theme/titlebar.</summary>
+    public event Action<AppConfig>? ConfigApplied;
     public CommandRegistry Commands { get; }
     public CommandBarViewModel CommandBar { get; }
 
@@ -78,7 +87,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IsToolbarVisible = Config.ShowToolbar;
         RefreshRecent();
         if (cfgError is not null) StatusText = cfgError;
+
+        _configWatcher = new ConfigWatcher(AppConfig.ConfigPath, ReloadConfig);
     }
+
+    private readonly ConfigWatcher _configWatcher;
 
     public void ShowWhichKey(IReadOnlyList<(string Seq, string Command)> candidates)
     {
@@ -200,10 +213,27 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         doc ??= SelectedTab;
         if (doc is null) return;
         int idx = Tabs.IndexOf(doc);
+        _closedTabs.Push((doc.FilePath, idx));   // remember for reopen/undo
         Tabs.Remove(doc);
         doc.Dispose();
         if (Tabs.Count > 0)
             SelectedTab = Tabs[Math.Clamp(idx, 0, Tabs.Count - 1)];
+    }
+
+    /// <summary>Reopens the most recently closed tab at its original position.</summary>
+    public async void ReopenClosedTab()
+    {
+        while (_closedTabs.Count > 0)
+        {
+            var (path, idx) = _closedTabs.Pop();
+            if (!File.Exists(path)) continue;
+            await OpenPathAsync(path, forceNewTab: true);
+            var reopened = Tabs[^1];
+            Tabs.Move(Tabs.Count - 1, Math.Clamp(idx, 0, Tabs.Count - 1));
+            SelectedTab = reopened;
+            return;
+        }
+        StatusText = "No closed tab to reopen";
     }
 
     [RelayCommand]
@@ -225,11 +255,30 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void ToggleAnnotationPanel() => IsAnnotationPanelOpen = !IsAnnotationPanelOpen;
 
+    /// <summary>Undo: annotation/page/bookmark edit if available, else reopen a closed tab.</summary>
     [RelayCommand]
-    private void Undo() => SelectedTab?.Undo();
+    public void Undo()
+    {
+        if (SelectedTab is { CanUndo: true } d) d.Undo();
+        else if (_closedTabs.Count > 0) ReopenClosedTab();
+        else SelectedTab?.Undo();
+    }
 
     [RelayCommand]
     private void Redo() => SelectedTab?.Redo();
+
+    // ----- Config hot-reload -----
+
+    public void ReloadConfig()
+    {
+        var cfg = AppConfig.Load(out var err);
+        Config = cfg;
+        KeyBindings = new KeyBindingService(cfg);
+        IsToolbarVisible = cfg.ShowToolbar;
+        OnPropertyChanged(nameof(IsTitlebarHidden));
+        ConfigApplied?.Invoke(cfg);
+        StatusText = err ?? "Config reloaded";
+    }
 
     /// <summary>Opens file(s) in new focused tabs (T / :O / :tabnew).</summary>
     [RelayCommand]

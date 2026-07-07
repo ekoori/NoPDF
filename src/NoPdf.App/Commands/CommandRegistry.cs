@@ -71,8 +71,9 @@ public sealed class CommandRegistry
             ["extract"] = Extract,
             ["insert"] = Insert,
             ["merge"] = Merge,
-            ["undo"] = (_, _) => Task.FromResult(DoUndo()),
+            ["undo"] = (_, _) => { _main.Undo(); return Msg(null); },
             ["redo"] = (_, _) => Task.FromResult(DoRedo()),
+            ["reopen"] = (_, _) => { _main.ReopenClosedTab(); return Msg(null); },
             ["fit"] = (_, _) => Task.FromResult(Fit(false)),
             ["fitwidth"] = (_, _) => Task.FromResult(Fit(true)),
             ["copy"] = (_, _) => { _main.RequestCopy(); return Msg(null); },
@@ -90,7 +91,7 @@ public sealed class CommandRegistry
             ["scrollpagedown"] = (_, _) => { Doc?.ScrollPage(+1); return Msg(null); },
             ["scrollpageup"] = (_, _) => { Doc?.ScrollPage(-1); return Msg(null); },
             ["delannot"] = (_, _) => { Doc?.DeleteSelectedAnnotation(); return Msg(null); },
-            ["marks"] = (_, _) => Task.FromResult(ListMarks()),
+            ["marks"] = (_, _) => Task.FromResult(OpenMarks()),
             ["help"] = (_, _) => Task.FromResult<string?>("Commands: " + string.Join(", ", CommandNames())),
         };
         // Register tool commands.
@@ -330,9 +331,16 @@ public sealed class CommandRegistry
     {
         var doc = Doc;
         if (doc is null) return "No document";
-        if (args.Length < 2) return "Usage: extract <range> <path>";
+        if (args.Length == 0) return "Usage: extract <range> [path]";
         string range = args[0];
-        string path = string.Join(' ', args.Skip(1));
+        string? path = args.Length >= 2 ? string.Join(' ', args.Skip(1)) : null;
+        if (path is null)
+        {
+            string dir = Path.GetDirectoryName(doc.FilePath) ?? "";
+            string name = $"{Path.GetFileNameWithoutExtension(doc.FilePath)}_p{range.Replace(',', '-')}.pdf";
+            path = await _main.PickSaveAs(dir, name);
+            if (path is null) return "Cancelled";
+        }
         await Task.Run(() => doc.ExtractRange(range, path));
         return $"Extracted {range} → {path}";
     }
@@ -386,10 +394,20 @@ public sealed class CommandRegistry
         return dest is null ? "Saved" : $"Saved to {dest}";
     }
 
-    private Task<string?> SaveAs(string[] args, string rest)
+    private async Task<string?> SaveAs(string[] args, string rest)
     {
-        if (string.IsNullOrWhiteSpace(rest)) return Msg("Usage: saveas <path>");
-        return Save(args, rest);
+        var doc = Doc;
+        if (doc is null) return "No document";
+        string? dest = rest.Length > 0 ? rest : null;
+        if (dest is null)
+        {
+            string dir = Path.GetDirectoryName(doc.FilePath) ?? "";
+            string name = Path.GetFileName(doc.FilePath);
+            dest = await _main.PickSaveAs(dir, name);
+            if (dest is null) return "Cancelled";
+        }
+        await doc.SaveAsync(dest);
+        return $"Saved to {dest}";
     }
 
     private Task<string?> Close(string[] args, string rest)
@@ -471,10 +489,50 @@ public sealed class CommandRegistry
         return _main.IsBookmarksPanelOpen ? "Bookmarks panel shown" : "Bookmarks panel hidden";
     }
 
-    private string? ListMarks()
+    private string? OpenMarks()
     {
         if (_quickmarks.All.Count == 0) return "No quickmarks";
-        return string.Join("  ", _quickmarks.All.Select(kv => $"{kv.Key}→{Path.GetFileName(kv.Value)}"));
+        _main.CommandBar.OpenWithSuggestions(":", _quickmarks.All.Select(kv => $"o {kv.Value}"));
+        return null;
+    }
+
+    // ----- Usage hints (shown in the status bar as a command word is typed) -----
+
+    private static readonly Dictionary<string, string> UsageText = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["open"] = "open <path|mark>… — open file(s), reuse an open tab",
+        ["O"] = "O <path> — open in a new tab",
+        ["tabnew"] = "tabnew [path] — open a new tab",
+        ["page"] = "page <n|first|last|next|prev> — go to page",
+        ["zoom"] = "zoom <pct|in|out|reset|width|page>",
+        ["find"] = "find <text> — search all pages",
+        ["highlight"] = "highlight — highlight the selection",
+        ["rotate"] = "rotate <range> [cw|ccw|180]",
+        ["delete"] = "delete <range> — delete pages",
+        ["insert"] = "insert <path> [at] — insert a PDF",
+        ["merge"] = "merge <path> — append a PDF",
+        ["extract"] = "extract <range> [path] — export pages (dialog if no path)",
+        ["save"] = "save [path] — write annotations",
+        ["saveas"] = "saveas [path] — save a copy (dialog if no path)",
+        ["print"] = "print [range]",
+        ["m"] = "m <name> — quickmark the current file",
+        ["go"] = "go <name> — open a quickmark",
+        ["bookmark"] = "bookmark <name> — bookmark the current page",
+        ["bmdel"] = "bmdel <name> — remove a page bookmark",
+        ["session"] = "session <save|load|del|list> [name]",
+        ["copypath"] = "copypath — copy the file's full path",
+        ["marks"] = "marks — pick a quickmark to open",
+        ["toolbar"] = "toolbar — toggle the icon toolbar",
+        ["props"] = "props — toggle the annotation panel",
+        ["toc"] = "toc — toggle the bookmarks panel",
+        ["pages"] = "pages — toggle the thumbnails panel",
+    };
+
+    public string? Usage(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return null;
+        if (UsageText.TryGetValue(name, out var u)) return u;
+        return _commands.ContainsKey(name) ? name : null;
     }
 
     private static Task<string?> Msg(string? m) => Task.FromResult(m);

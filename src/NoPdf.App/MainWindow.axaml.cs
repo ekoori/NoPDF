@@ -38,7 +38,9 @@ public partial class MainWindow : Window
         // Hide the OS title bar (icon + min/max/close) unless the config re-enables
         // it. BorderOnly keeps a resize border; the drag strip moves the window.
         if (!vm.Config.ShowTitlebar)
-            SystemDecorations = Avalonia.Controls.WindowDecorations.BorderOnly;
+            WindowDecorations = Avalonia.Controls.WindowDecorations.BorderOnly;
+
+        vm.ConfigApplied += ApplyConfigLive;
 
         AddHandler(KeyDownEvent, OnGlobalKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
 
@@ -65,6 +67,20 @@ public partial class MainWindow : Window
 
     private void OnCommandButtonClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
         => Vm.CommandBar.Open(":");
+
+    private void ApplyConfigLive(NoPdf.App.Config.AppConfig cfg)
+    {
+        if (Avalonia.Application.Current is { } app)
+            app.RequestedThemeVariant = cfg.Theme.ToLowerInvariant() switch
+            {
+                "light" => Avalonia.Styling.ThemeVariant.Light,
+                "dark" => Avalonia.Styling.ThemeVariant.Dark,
+                _ => Avalonia.Styling.ThemeVariant.Default,
+            };
+        WindowDecorations = cfg.ShowTitlebar
+            ? Avalonia.Controls.WindowDecorations.Full
+            : Avalonia.Controls.WindowDecorations.BorderOnly;
+    }
 
     private void OnDragStripPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -135,13 +151,26 @@ public partial class MainWindow : Window
 
     private async void OnGlobalKeyDown(object? sender, KeyEventArgs e)
     {
-        // While the command bar is focused, let it handle everything.
-        if (Vm.CommandBar.IsVisible) return;
-        // While editing annotation text, don't hijack keys.
-        if (FocusManager?.GetFocusedElement() is TextBox) return;
-
         bool ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
         bool alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
+        bool inText = FocusManager?.GetFocusedElement() is TextBox;
+
+        // Command bar open: if it's focused let it handle keys; if the user clicked
+        // away (page focused), ':' brings focus back and Esc closes it.
+        if (Vm.CommandBar.IsVisible)
+        {
+            if (inText) return;
+            if (!ctrl && !alt)
+            {
+                if (e.Key == Key.OemSemicolon && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                { Vm.CommandBar.RequestFocus(); e.Handled = true; return; }
+                if (e.Key == Key.Escape) { Vm.CommandBar.Cancel(); e.Handled = true; return; }
+            }
+            return;
+        }
+
+        // While editing annotation text, don't hijack keys.
+        if (inText) return;
 
         // Command-line / search triggers and Escape (no modifiers).
         if (!ctrl && !alt)
@@ -304,17 +333,22 @@ public partial class MainWindow : Window
         return files.Select(f => f.TryGetLocalPath()).FirstOrDefault(p => !string.IsNullOrEmpty(p));
     }
 
-    private async Task<string?> PickSaveAsAsync()
+    private async Task<string?> PickSaveAsAsync(string? dir, string? name)
     {
-        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        var opts = new FilePickerSaveOptions
         {
             Title = "Save PDF As",
             DefaultExtension = "pdf",
+            SuggestedFileName = name,
             FileTypeChoices = new[]
             {
                 new FilePickerFileType("PDF documents") { Patterns = new[] { "*.pdf" } },
             },
-        });
+        };
+        if (!string.IsNullOrEmpty(dir))
+            opts.SuggestedStartLocation = await StorageProvider.TryGetFolderFromPathAsync(dir);
+
+        var file = await StorageProvider.SaveFilePickerAsync(opts);
         return file?.TryGetLocalPath();
     }
 }

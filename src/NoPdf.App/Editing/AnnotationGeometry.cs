@@ -94,8 +94,9 @@ public static class AnnotationGeometry
                 n.Position = new PdfPoint(n.Position.X + dx, n.Position.Y + dy);
                 break;
             case CalloutAnnotation c:
+                // Move the text box (and its bend); the arrow tip stays anchored
+                // to whatever it points at.
                 c.Rect = Offset(c.Rect, dx, dy);
-                c.Tip = new PdfPoint(c.Tip.X + dx, c.Tip.Y + dy);
                 if (c.Knee is { } k) c.Knee = new PdfPoint(k.X + dx, k.Y + dy);
                 break;
             case SquareAnnotation s:

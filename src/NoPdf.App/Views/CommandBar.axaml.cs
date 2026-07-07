@@ -22,17 +22,20 @@ public partial class CommandBar : UserControl
 
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
-        if (_vm is not null) _vm.Opened -= OnOpened;
+        if (_vm is not null) { _vm.Opened -= OnOpened; _vm.FocusRequested -= OnFocusRequested; }
         _vm = DataContext as CommandBarViewModel;
-        if (_vm is not null) _vm.Opened += OnOpened;
+        if (_vm is not null) { _vm.Opened += OnOpened; _vm.FocusRequested += OnFocusRequested; }
     }
 
-    private void OnOpened()
+    private void OnOpened() => FocusInput(caretToEnd: true);
+    private void OnFocusRequested() => FocusInput(caretToEnd: true);
+
+    private void FocusInput(bool caretToEnd)
     {
         Dispatcher.UIThread.Post(() =>
         {
             _input?.Focus();
-            if (_input is not null) _input.CaretIndex = _input.Text?.Length ?? 0;
+            if (caretToEnd && _input is not null) _input.CaretIndex = _input.Text?.Length ?? 0;
         }, DispatcherPriority.Input);
     }
 
@@ -57,6 +60,12 @@ public partial class CommandBar : UserControl
             case Key.Down:
                 e.Handled = true;
                 _vm.HistoryNext();
+                MoveCaretToEnd();
+                break;
+            case Key.Tab:
+                e.Handled = true;
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Shift)) _vm.CompletePrev();
+                else _vm.CompleteNext();
                 MoveCaretToEnd();
                 break;
         }
