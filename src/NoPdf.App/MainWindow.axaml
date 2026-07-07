@@ -16,6 +16,7 @@
 
     <Window.Resources>
         <conv:EnumEqualsConverter x:Key="EnumEq"/>
+        <conv:HexBrushConverter x:Key="HexBrush"/>
     </Window.Resources>
 
     <Window.Styles>
@@ -24,7 +25,7 @@
             <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="0"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#E6E6E6"/>
+            <Setter Property="Foreground" Value="{DynamicResource ChromeForeground}"/>
             <Setter Property="IsTabStop" Value="False"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -39,17 +40,17 @@
         <Style Selector="Button.tool PathIcon">
             <Setter Property="Width" Value="17"/>
             <Setter Property="Height" Value="17"/>
-            <Setter Property="Foreground" Value="#E6E6E6"/>
+            <Setter Property="Foreground" Value="{DynamicResource ChromeForeground}"/>
         </Style>
         <Style Selector="Button.tool:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="#3E3E42"/>
+            <Setter Property="Background" Value="{DynamicResource ChromeHover}"/>
         </Style>
         <!-- Active tool: highlighted background + bright icon -->
         <Style Selector="Button.tool.active /template/ ContentPresenter">
-            <Setter Property="Background" Value="#0E639C"/>
+            <Setter Property="Background" Value="{DynamicResource AccentActive}"/>
         </Style>
         <Style Selector="Button.tool.active PathIcon">
-            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Foreground" Value="{DynamicResource ChromeForeground}"/>
         </Style>
         <!-- Smaller, tighter tabs -->
         <Style Selector="TabItem">
@@ -96,24 +97,25 @@
         </Style>
         <!-- Dark side panels -->
         <Style Selector="Border.sidepanel TextBlock">
-            <Setter Property="Foreground" Value="#DDDDDD"/>
+            <Setter Property="Foreground" Value="{DynamicResource ChromeForeground}"/>
         </Style>
         <Style Selector="Border.sidepanel TextBlock.muted">
-            <Setter Property="Foreground" Value="#8C9298"/>
+            <Setter Property="Foreground" Value="{DynamicResource MutedForeground}"/>
         </Style>
         <Style Selector="Border.sidepanel Button.pageop PathIcon">
-            <Setter Property="Foreground" Value="#DDDDDD"/>
+            <Setter Property="Foreground" Value="{DynamicResource ChromeForeground}"/>
         </Style>
         <Style Selector="Border.sidepanel Button.pageop:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="#3E3E42"/>
+            <Setter Property="Background" Value="{DynamicResource ChromeHover}"/>
         </Style>
     </Window.Styles>
 
     <DockPanel LastChildFill="True">
 
         <!-- ===== Toolbar ===== -->
-        <Border DockPanel.Dock="Top" Background="#2D2D30" BorderBrush="#1E1E1E"
-                BorderThickness="0,0,0,1" Padding="8,5">
+        <Border DockPanel.Dock="Top" Background="{DynamicResource ChromeBackground}" BorderBrush="{DynamicResource ChromeBorder}"
+                BorderThickness="0,0,0,1" Padding="8,5"
+                IsVisible="{Binding IsToolbarVisible}">
             <StackPanel Orientation="Horizontal" Spacing="3">
                 <Button Classes="tool" ToolTip.Tip="Open (Ctrl+O)" Command="{Binding OpenCommand}">
                     <PathIcon Data="{StaticResource IconOpen}"/></Button>
@@ -134,7 +136,11 @@
                         Command="{Binding ToggleBookmarksCommand}"
                         Classes.active="{Binding IsBookmarksPanelOpen}">
                     <PathIcon Data="{StaticResource IconBookmark}"/></Button>
-                <Border Width="1" Background="#4A4A4A" Margin="5,2"/>
+                <Button Classes="tool" ToolTip.Tip="Annotation properties"
+                        Command="{Binding ToggleAnnotationPanelCommand}"
+                        Classes.active="{Binding IsAnnotationPanelOpen}">
+                    <PathIcon Data="{StaticResource IconTune}"/></Button>
+                <Border Width="1" Background="{DynamicResource Separator}" Margin="5,2"/>
 
                 <Button Classes="tool" ToolTip.Tip="Hand / pan"
                         Command="{Binding SelectToolCommand}" CommandParameter="{x:Static ed:EditorTool.Hand}"
@@ -148,7 +154,7 @@
                         Command="{Binding SelectToolCommand}" CommandParameter="{x:Static ed:EditorTool.Zoom}"
                         Classes.active="{Binding SelectedTab.CurrentTool, Converter={StaticResource EnumEq}, ConverterParameter={x:Static ed:EditorTool.Zoom}}">
                     <PathIcon Data="{StaticResource IconZoom}"/></Button>
-                <Border Width="1" Background="#4A4A4A" Margin="5,2"/>
+                <Border Width="1" Background="{DynamicResource Separator}" Margin="5,2"/>
 
                 <Button Classes="tool" ToolTip.Tip="Highlight"
                         Command="{Binding SelectToolCommand}" CommandParameter="{x:Static ed:EditorTool.Highlight}"
@@ -182,20 +188,20 @@
                         Command="{Binding SelectToolCommand}" CommandParameter="{x:Static ed:EditorTool.Polyline}"
                         Classes.active="{Binding SelectedTab.CurrentTool, Converter={StaticResource EnumEq}, ConverterParameter={x:Static ed:EditorTool.Polyline}}">
                     <PathIcon Data="{StaticResource IconPolyline}"/></Button>
-                <Border Width="1" Background="#4A4A4A" Margin="5,2"/>
+                <Border Width="1" Background="{DynamicResource Separator}" Margin="5,2"/>
 
                 <Button Classes="tool" ToolTip.Tip="Zoom out"
                         Command="{Binding SelectedTab.ZoomOutCommand}">
                     <PathIcon Data="{StaticResource IconZoomOut}"/></Button>
                 <TextBlock Text="{Binding SelectedTab.ZoomPercent, StringFormat='{}{0}%'}"
-                           Foreground="#DDDDDD" VerticalAlignment="Center" MinWidth="42" TextAlignment="Center"/>
+                           Foreground="{DynamicResource ChromeForeground}" VerticalAlignment="Center" MinWidth="42" TextAlignment="Center"/>
                 <Button Classes="tool" ToolTip.Tip="Zoom in"
                         Command="{Binding SelectedTab.ZoomInCommand}">
                     <PathIcon Data="{StaticResource IconZoomIn}"/></Button>
                 <Button Classes="tool" ToolTip.Tip="Reset zoom"
                         Command="{Binding SelectedTab.ZoomResetCommand}">
                     <PathIcon Data="{StaticResource IconZoomReset}"/></Button>
-                <Border Width="1" Background="#4A4A4A" Margin="5,2"/>
+                <Border Width="1" Background="{DynamicResource Separator}" Margin="5,2"/>
 
                 <Button Classes="tool" ToolTip.Tip="Command line (:)" Click="OnCommandButtonClick">
                     <PathIcon Data="{StaticResource IconCommand}"/></Button>
@@ -203,16 +209,16 @@
         </Border>
 
         <!-- ===== Status bar (very bottom) ===== -->
-        <Border DockPanel.Dock="Bottom" Background="#F3F3F3" BorderBrush="#DADADA"
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource ChromeBackground}" BorderBrush="{DynamicResource ChromeBorder}"
                 BorderThickness="0,1,0,0" Padding="10,3">
-            <TextBlock Text="{Binding StatusText}" FontSize="12" Foreground="#555"/>
+            <TextBlock Text="{Binding StatusText}" FontSize="12" Foreground="{DynamicResource StatusForeground}"/>
         </Border>
 
         <!-- ===== Command bar (above status bar) ===== -->
         <views:CommandBar DockPanel.Dock="Bottom" DataContext="{Binding CommandBar}"/>
 
         <!-- ===== Which-key hint (above command bar) ===== -->
-        <Border DockPanel.Dock="Bottom" Background="#252526" BorderBrush="#1E1E1E"
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource ChromeBorder}"
                 BorderThickness="0,1,0,0" Padding="10,5"
                 IsVisible="{Binding IsWhichKeyVisible}">
             <ItemsControl ItemsSource="{Binding WhichKeyItems}">
@@ -221,8 +227,8 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="sys:String">
-                        <Border Background="#37373D" CornerRadius="3" Padding="7,2" Margin="0,0,6,3">
-                            <TextBlock Text="{Binding}" Foreground="#DDDDDD"
+                        <Border Background="{DynamicResource WhichKeyChip}" CornerRadius="3" Padding="7,2" Margin="0,0,6,3">
+                            <TextBlock Text="{Binding}" Foreground="{DynamicResource ChromeForeground}"
                                        FontFamily="Cascadia Code,Consolas,monospace" FontSize="12"/>
                         </Border>
                     </DataTemplate>
@@ -231,11 +237,11 @@
         </Border>
 
         <!-- ===== Main area ===== -->
-        <Grid ColumnDefinitions="Auto,*,Auto">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
 
             <!-- Bookmarks / outline panel -->
-            <Border Grid.Column="0" Classes="sidepanel" Width="260" Background="#2D2D30"
-                    BorderBrush="#1E1E1E" BorderThickness="0,0,1,0"
+            <Border Grid.Column="0" Classes="sidepanel" Width="260" Background="{DynamicResource ChromeBackground}"
+                    BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,1,0"
                     IsVisible="{Binding IsBookmarksPanelOpen}">
                 <DockPanel Margin="0">
                     <TextBlock DockPanel.Dock="Top" Classes="muted" Text="BOOKMARKS" FontSize="11" FontWeight="SemiBold"
@@ -287,15 +293,15 @@
                         IsVisible="{Binding !HasDocument}">
                 <PathIcon Data="{StaticResource IconOpen}" Width="56" Height="56" Opacity="0.35"/>
                 <TextBlock Text="No document open" FontSize="18" HorizontalAlignment="Center"
-                           Foreground="#777"/>
+                           Foreground="{DynamicResource MutedForeground}"/>
                 <Button Content="Open a PDF…" Padding="14,6" HorizontalAlignment="Center"
                         Command="{Binding OpenCommand}"/>
                 <TextBlock Text="Tip: press : for the command line, / to find"
-                           FontSize="12" HorizontalAlignment="Center" Foreground="#999"/>
+                           FontSize="12" HorizontalAlignment="Center" Foreground="{DynamicResource MutedForeground}"/>
                 <Border Width="360" Margin="0,8,0,0" IsVisible="{Binding HasRecent}">
                     <StackPanel Spacing="2">
                         <TextBlock Text="Recent" FontSize="11" FontWeight="SemiBold"
-                                   Foreground="#888" Margin="8,0,0,2"/>
+                                   Foreground="{DynamicResource MutedForeground}" Margin="8,0,0,2"/>
                         <ItemsControl ItemsSource="{Binding RecentFiles}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="sys:String">
@@ -332,13 +338,13 @@
             </Panel>
 
             <!-- Thumbnails / pages panel -->
-            <Border Grid.Column="2" Classes="sidepanel" Width="196" Background="#2D2D30"
-                    BorderBrush="#1E1E1E" BorderThickness="1,0,0,0"
+            <Border Grid.Column="2" Classes="sidepanel" Width="196" Background="{DynamicResource ChromeBackground}"
+                    BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="1,0,0,0"
                     IsVisible="{Binding IsThumbnailsPanelOpen}">
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Top" Classes="muted" Text="PAGES" FontSize="11" FontWeight="SemiBold"
                                Margin="12,10,12,6"/>
-                    <Border DockPanel.Dock="Top" BorderBrush="#1E1E1E" BorderThickness="0,0,0,1" Padding="6,2">
+                    <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,0,1" Padding="6,2">
                         <StackPanel Orientation="Horizontal" Spacing="1">
                             <Button Classes="pageop" ToolTip.Tip="Rotate left" Click="OnThumbRotateLeft">
                                 <PathIcon Data="{StaticResource IconRotateLeft}"/></Button>
@@ -362,6 +368,74 @@
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- Annotation properties panel -->
+            <Border Grid.Column="3" Classes="sidepanel" Width="248"
+                    Background="{DynamicResource PanelBackground}"
+                    BorderBrush="{DynamicResource PanelBorder}" BorderThickness="1,0,0,0"
+                    IsVisible="{Binding IsAnnotationPanelOpen}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Classes="muted" Text="PROPERTIES"
+                               FontSize="11" FontWeight="SemiBold" Margin="12,10,12,6"/>
+                    <TextBlock DockPanel.Dock="Top" Classes="muted" TextWrapping="Wrap" Margin="12,4"
+                               Text="Select an annotation (Select tool) to edit it."
+                               IsVisible="{Binding SelectedTab.AnnotationEditor, Converter={x:Static ObjectConverters.IsNull}}"/>
+                    <ScrollViewer IsVisible="{Binding SelectedTab.AnnotationEditor, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <StackPanel Margin="12,4,12,12" Spacing="12"
+                                    DataContext="{Binding SelectedTab.AnnotationEditor}"
+                                    x:DataType="vm:AnnotationEditorViewModel">
+                            <TextBlock Text="{Binding TypeName}" FontWeight="SemiBold" FontSize="13"/>
+
+                            <StackPanel Spacing="4" IsVisible="{Binding HasStroke}">
+                                <TextBlock Classes="muted" Text="Colour" FontSize="11"/>
+                                <TextBox Text="{Binding StrokeHex}" FontSize="12"/>
+                                <ItemsControl ItemsSource="{Binding Palette}">
+                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="sys:String">
+                                            <Button Width="22" Height="22" Margin="0,2,4,0" Padding="0"
+                                                    Background="{Binding Converter={StaticResource HexBrush}}"
+                                                    Command="{Binding $parent[ItemsControl].((vm:AnnotationEditorViewModel)DataContext).PickStrokeCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <StackPanel Spacing="2" IsVisible="{Binding HasWidth}">
+                                <TextBlock Classes="muted" Text="Line width" FontSize="11"/>
+                                <Slider Minimum="0.5" Maximum="12" Value="{Binding StrokeWidth}"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="4" IsVisible="{Binding HasFill}">
+                                <CheckBox Content="Fill" IsChecked="{Binding FillEnabled}" FontSize="12"/>
+                                <TextBox Text="{Binding FillHex}" IsEnabled="{Binding FillEnabled}" FontSize="12"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="4" IsVisible="{Binding HasTextColor}">
+                                <TextBlock Classes="muted" Text="Text colour" FontSize="11"/>
+                                <TextBox Text="{Binding TextHex}" FontSize="12"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="2" IsVisible="{Binding HasFont}">
+                                <TextBlock Classes="muted" Text="Font size" FontSize="11"/>
+                                <Slider Minimum="6" Maximum="48" Value="{Binding FontSize}"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="2" IsVisible="{Binding HasOpacity}">
+                                <TextBlock Classes="muted" Text="Frame opacity" FontSize="11"/>
+                                <Slider Minimum="0" Maximum="1" Value="{Binding Opacity}"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="4" IsVisible="{Binding HasContents}">
+                                <TextBlock Classes="muted" Text="Note / text" FontSize="11"/>
+                                <TextBox Text="{Binding Contents}" AcceptsReturn="True"
+                                         TextWrapping="Wrap" MinHeight="60" FontSize="12"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
                 </DockPanel>
             </Border>
         </Grid>

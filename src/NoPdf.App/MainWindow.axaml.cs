@@ -35,6 +35,26 @@ public partial class MainWindow : Window
         DataContext = vm;
 
         AddHandler(KeyDownEvent, OnGlobalKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+
+        DragDrop.SetAllowDrop(this, true);
+        AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        AddHandler(DragDrop.DropEvent, OnDrop);
+    }
+
+    private void OnDragOver(object? sender, DragEventArgs e)
+        => e.DragEffects = e.DataTransfer.Contains(DataFormat.File)
+            ? DragDropEffects.Copy : DragDropEffects.None;
+
+    private async void OnDrop(object? sender, DragEventArgs e)
+    {
+        var files = e.DataTransfer.TryGetFiles();
+        if (files is null) return;
+        foreach (var f in files)
+        {
+            var path = f.TryGetLocalPath();
+            if (path is not null && path.EndsWith(".pdf", System.StringComparison.OrdinalIgnoreCase))
+                await Vm.OpenPathAsync(path, forceNewTab: true);
+        }
     }
 
     private void OnCommandButtonClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)

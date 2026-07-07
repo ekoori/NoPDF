@@ -24,8 +24,58 @@ public sealed class KeyBindingService
 
     public KeyBindingService(AppConfig config)
     {
-        foreach (var kv in config.NormalBindings) _bindings[kv.Key] = kv.Value;
-        foreach (var kv in config.SearchBindings) _bindings.TryAdd(kv.Key, kv.Value);
+        foreach (var kv in config.NormalBindings) _bindings[Normalize(kv.Key)] = kv.Value;
+        foreach (var kv in config.SearchBindings) _bindings.TryAdd(Normalize(kv.Key), kv.Value);
+    }
+
+    /// <summary>
+    /// Canonicalizes a binding string so different notations for the same key all
+    /// match the tokens produced at runtime, e.g. <c>&lt;Ctrl-R&gt;</c>,
+    /// <c>&lt;ctrl+r&gt;</c> and <c>&lt;c-r&gt;</c> all become <c>&lt;c-r&gt;</c>.
+    /// </summary>
+    public static string Normalize(string binding)
+    {
+        var sb = new System.Text.StringBuilder();
+        int i = 0;
+        while (i < binding.Length)
+        {
+            if (binding[i] == '<')
+            {
+                int j = binding.IndexOf('>', i);
+                if (j < 0) { sb.Append(binding[i..]); break; }
+                sb.Append(NormalizeGroup(binding[(i + 1)..j]));
+                i = j + 1;
+            }
+            else { sb.Append(binding[i]); i++; }
+        }
+        return sb.ToString();
+    }
+
+    private static string NormalizeGroup(string inner)
+    {
+        var parts = inner.Split(new[] { '-', '+' }, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return "<>";
+        bool c = false, a = false, s = false;
+        for (int k = 0; k < parts.Length - 1; k++)
+        {
+            switch (parts[k].ToLowerInvariant())
+            {
+                case "c" or "ctrl" or "control": c = true; break;
+                case "a" or "alt" or "option": a = true; break;
+                case "s" or "shift": s = true; break;
+            }
+        }
+        string key = parts[^1].ToLowerInvariant() switch
+        {
+            "escape" => "esc", "return" or "enter" => "cr",
+            "backspace" => "bs", "delete" => "del", "pgup" => "pageup", "pgdn" => "pagedown",
+            var v => v,
+        };
+        var mods = new List<string>(3);
+        if (c) mods.Add("c");
+        if (a) mods.Add("a");
+        if (s) mods.Add("s");
+        return mods.Count == 0 ? $"<{key}>" : $"<{string.Join('-', mods)}-{key}>";
     }
 
     public bool HasPending => _pending.Length > 0;

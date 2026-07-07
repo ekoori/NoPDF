@@ -16,8 +16,12 @@ namespace NoPdf.App.Config;
 /// </summary>
 public sealed class AppConfig
 {
-    public string Theme { get; set; } = "dark";
+    public string Theme { get; set; } = "dark";        // dark | light | inherit
+    public bool ShowToolbar { get; set; } = false;
     public int CommandHistorySize { get; set; } = 200;
+
+    /// <summary>Number of history lines shown above the command line.</summary>
+    public int HistoryVisible { get; set; } = 5;
 
     /// <summary>Lines scrolled by scrollup/scrolldown (j/k, arrows).</summary>
     public int ScrollRows { get; set; } = 3;
@@ -130,8 +134,10 @@ public sealed class AppConfig
 #   Misc:       print [range]   save [path]   saveas <path>   help
 # ──────────────────────────────────────────────────────────────────────
 
-theme: dark
+theme: dark               # dark | light | inherit (follow the OS)
+show_toolbar: false       # the icon toolbar is hidden by default
 command_history_size: 200
+history_visible: 5        # history lines shown above the ":" line
 scroll_rows: 3
 
 # Text-box annotation defaults.

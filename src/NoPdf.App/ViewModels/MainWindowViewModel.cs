@@ -23,6 +23,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _statusText = "Ready";
     [ObservableProperty] private bool _isBookmarksPanelOpen;
     [ObservableProperty] private bool _isThumbnailsPanelOpen;
+    [ObservableProperty] private bool _isToolbarVisible;
+    [ObservableProperty] private bool _isAnnotationPanelOpen;
 
     public bool HasDocument => SelectedTab is not null;
 
@@ -38,6 +40,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public Quickmarks Quickmarks { get; }
     public RecentFiles Recent { get; }
     public SessionStore Session { get; }
+    public ViewStateStore ViewStates { get; } = new();
     private bool _restoring;
     public AppConfig Config { get; }
     public KeyBindingService KeyBindings { get; }
@@ -66,7 +69,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Config = AppConfig.Load(out string? cfgError);
         KeyBindings = new KeyBindingService(Config);
         Commands = new CommandRegistry(this, Quickmarks);
-        CommandBar = new CommandBarViewModel(this, Config.CommandHistorySize);
+        CommandBar = new CommandBarViewModel(this, Config.CommandHistorySize, Config.HistoryVisible);
+        IsToolbarVisible = Config.ShowToolbar;
         RefreshRecent();
         if (cfgError is not null) StatusText = cfgError;
     }
@@ -154,6 +158,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             doc.TextboxFontSize = Config.TextboxFontSize;
             doc.TextboxFrameColor = Config.TextboxFrameColorValue;
             doc.TextboxFrameOpacity = Config.TextboxFrameOpacity;
+            var saved = ViewStates.Get(path);
+            if (saved is not null) doc.InitialView = (saved.Zoom, saved.OffsetX, saved.OffsetY);
+            doc.ViewStateSink = (z, x, y) => ViewStates.Set(path, z, x, y);
             Tabs.Add(doc);
             SelectedTab = doc;
             Recent.Add(path);
@@ -190,6 +197,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     [RelayCommand]
     private void ToggleThumbnails() => IsThumbnailsPanelOpen = !IsThumbnailsPanelOpen;
+
+    [RelayCommand]
+    private void ToggleToolbar() => IsToolbarVisible = !IsToolbarVisible;
+
+    [RelayCommand]
+    private void ToggleAnnotationPanel() => IsAnnotationPanelOpen = !IsAnnotationPanelOpen;
 
     [RelayCommand]
     private void Undo() => SelectedTab?.Undo();

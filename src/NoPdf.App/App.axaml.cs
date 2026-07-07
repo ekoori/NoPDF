@@ -22,6 +22,17 @@ public partial class App : Application
             var window = new MainWindow();
             desktop.MainWindow = window;
 
+            // Apply the configured theme (light | dark | inherit).
+            if (window.DataContext is MainWindowViewModel mvm)
+            {
+                RequestedThemeVariant = mvm.Config.Theme.ToLowerInvariant() switch
+                {
+                    "light" => Avalonia.Styling.ThemeVariant.Light,
+                    "dark" => Avalonia.Styling.ThemeVariant.Dark,
+                    _ => Avalonia.Styling.ThemeVariant.Default, // inherit from OS
+                };
+            }
+
             // Open any .pdf paths passed on the command line ("Open with…"),
             // otherwise restore the previous session's tabs.
             var args = desktop.Args ?? System.Array.Empty<string>();

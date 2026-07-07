@@ -72,6 +72,14 @@ public partial class DocumentView : UserControl
             if (top <= 8 && top > bestTop) { bestTop = top; best = pvm.PageIndex; }
         }
         if (best >= 0) _vm.SetCurrentPageSilent(best + 1);
+
+        // Throttle persistence of the view position.
+        var now = DateTime.UtcNow;
+        if ((now - _lastViewSave).TotalMilliseconds > 400)
+        {
+            _lastViewSave = now;
+            SaveViewState();
+        }
     }
 
     private void OnDataContextChanged(object? sender, EventArgs e)
@@ -103,7 +111,34 @@ public partial class DocumentView : UserControl
     {
         base.OnAttachedToVisualTree(e);
         ApplyDpi();
-        Dispatcher.UIThread.Post(() => { HookScroll(); PageList.Focus(); }, DispatcherPriority.Loaded);
+        Dispatcher.UIThread.Post(() => { HookScroll(); PageList.Focus(); ApplyInitialView(); }, DispatcherPriority.Loaded);
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        SaveViewState();
+    }
+
+    private void ApplyInitialView()
+    {
+        if (_vm?.InitialView is not { } iv) return;
+        _vm.SetZoom(iv.Zoom);
+        Dispatcher.UIThread.Post(() =>
+        {
+            var sv = Scroll;
+            if (sv is not null) sv.Offset = new Vector(iv.OffsetX, iv.OffsetY);
+            _vm!.InitialView = null;
+        }, DispatcherPriority.Background);
+    }
+
+    private DateTime _lastViewSave = DateTime.MinValue;
+
+    private void SaveViewState()
+    {
+        var sv = Scroll;
+        if (sv is null || _vm is null) return;
+        _vm.ReportViewState(_vm.ZoomPercent / 100.0, sv.Offset.X, sv.Offset.Y);
     }
 
     private void ApplyDpi()
@@ -138,10 +173,10 @@ public partial class DocumentView : UserControl
 
     private void UpdateCursor()
     {
+        // Base cursor per tool; PageView refines it while hovering a page.
         Cursor = _vm?.CurrentTool switch
         {
             EditorTool.Hand => new Cursor(StandardCursorType.Hand),
-            EditorTool.Select => new Cursor(StandardCursorType.Ibeam),
             EditorTool.Zoom => new Cursor(StandardCursorType.Cross),
             _ => Cursor.Default,
         };

@@ -1,0 +1,46 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- App-specific themed brushes. Values switch with the active ThemeVariant
+         (Light/Dark), which App sets from the config `theme` (light|dark|inherit). -->
+    <ResourceDictionary.ThemeDictionaries>
+
+        <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush x:Key="ChromeBackground" Color="#2D2D30"/>
+            <SolidColorBrush x:Key="ChromeBorder" Color="#1E1E1E"/>
+            <SolidColorBrush x:Key="PanelBackground" Color="#252526"/>
+            <SolidColorBrush x:Key="PanelBorder" Color="#1E1E1E"/>
+            <SolidColorBrush x:Key="CommandBackground" Color="#1E1E1E"/>
+            <SolidColorBrush x:Key="CommandForeground" Color="#EEEEEE"/>
+            <SolidColorBrush x:Key="CommandPrompt" Color="#7FD4FF"/>
+            <SolidColorBrush x:Key="CommandHistory" Color="#9DB8C9"/>
+            <SolidColorBrush x:Key="MutedForeground" Color="#8C9298"/>
+            <SolidColorBrush x:Key="ChromeForeground" Color="#E6E6E6"/>
+            <SolidColorBrush x:Key="ChromeHover" Color="#3E3E42"/>
+            <SolidColorBrush x:Key="AccentActive" Color="#0E639C"/>
+            <SolidColorBrush x:Key="PageAreaBackground" Color="#525659"/>
+            <SolidColorBrush x:Key="WhichKeyChip" Color="#37373D"/>
+            <SolidColorBrush x:Key="StatusForeground" Color="#B8BCC0"/>
+            <SolidColorBrush x:Key="Separator" Color="#4A4A4A"/>
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="ChromeBackground" Color="#F3F3F3"/>
+            <SolidColorBrush x:Key="ChromeBorder" Color="#D6D6D6"/>
+            <SolidColorBrush x:Key="PanelBackground" Color="#F5F5F5"/>
+            <SolidColorBrush x:Key="PanelBorder" Color="#D6D6D6"/>
+            <SolidColorBrush x:Key="CommandBackground" Color="#E9E9E9"/>
+            <SolidColorBrush x:Key="CommandForeground" Color="#1A1A1A"/>
+            <SolidColorBrush x:Key="CommandPrompt" Color="#0066B8"/>
+            <SolidColorBrush x:Key="CommandHistory" Color="#4A6070"/>
+            <SolidColorBrush x:Key="MutedForeground" Color="#6A6A6A"/>
+            <SolidColorBrush x:Key="ChromeForeground" Color="#303030"/>
+            <SolidColorBrush x:Key="ChromeHover" Color="#DDDDDD"/>
+            <SolidColorBrush x:Key="AccentActive" Color="#CCE4F7"/>
+            <SolidColorBrush x:Key="PageAreaBackground" Color="#A9AEB2"/>
+            <SolidColorBrush x:Key="WhichKeyChip" Color="#DDDDDD"/>
+            <SolidColorBrush x:Key="StatusForeground" Color="#555555"/>
+            <SolidColorBrush x:Key="Separator" Color="#C4C4C4"/>
+        </ResourceDictionary>
+
+    </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

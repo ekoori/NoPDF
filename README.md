@@ -79,8 +79,16 @@ you remap any of them. Keys support modifiers and special keys
 (so `:w` runs `save`). Text-box defaults (font size, frame colour, frame
 opacity) are configurable too.
 
-The app **remembers your open tabs** — order and active tab — and restores them
-on the next launch (unless you open a file directly).
+The app **remembers your open tabs** (order + active tab) and each file's **last
+view position** (zoom + scroll), restoring them on the next launch. You can
+**drop PDF files onto the window** to open them in new tabs, and the mouse
+cursor adapts to what it's over (text, move, resize handles, hand).
+
+**Theme:** set `theme: dark | light | inherit` in the config. The **toolbar is
+hidden by default** (`show_toolbar: false`, toggle with `:toolbar`) — the app is
+driven by the command line and hotkeys. An **annotation properties panel**
+(toolbar icon or `:props`) edits the selected annotation's colour, line width,
+fill, font size, and frame opacity.
 
 **Default hotkeys:** `hl` highlight · `gg`/`G` first/last page · `j`/`k` +
 arrows scroll · `<pageup>`/`<pagedown>` page scroll · `H`/`L` (and `gt`/`gT`)

@@ -8,7 +8,8 @@
                 Width="{Binding DisplayWidth}" Height="{Binding DisplayHeight}">
             <Image Source="{Binding Image}" Stretch="Fill"/>
         </Border>
-        <TextBlock Text="{Binding PageNumber}" FontSize="11" Foreground="#BBBBBB"
+        <TextBlock Text="{Binding PageNumber}" FontSize="11"
+                   Foreground="{DynamicResource MutedForeground}"
                    HorizontalAlignment="Center"/>
     </StackPanel>
 </UserControl>

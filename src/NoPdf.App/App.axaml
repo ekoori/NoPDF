@@ -12,6 +12,7 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceInclude Source="avares://NoPdf.App/Assets/Icons.axaml"/>
+                <ResourceInclude Source="avares://NoPdf.App/Assets/Theme.axaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

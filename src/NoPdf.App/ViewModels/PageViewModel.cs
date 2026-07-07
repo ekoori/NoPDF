@@ -248,6 +248,16 @@ public sealed partial class PageViewModel : ViewModelBase
 
     public void NotifyAnnotationChanged() => OverlayInvalidated?.Invoke();
 
+    /// <summary>True if a page-space point falls inside a text glyph (for the I-beam cursor).</summary>
+    public bool IsOverText(double pageX, double pageY)
+    {
+        if (_textPage is null) return false;
+        foreach (var c in _textPage.Chars)
+            if (pageX >= c.Left && pageX <= c.Right && pageY >= c.Bottom && pageY <= c.Top)
+                return true;
+        return false;
+    }
+
     // ----- Rendering -----
 
     private void EnsureRendered()

@@ -40,6 +40,12 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     private double _zoom = 1.0;
     private PageViewModel? _activeSelectionPage;
 
+    /// <summary>Zoom + scroll offset to restore on first layout (null = none).</summary>
+    public (double Zoom, double OffsetX, double OffsetY)? InitialView { get; set; }
+    /// <summary>Set by the host to persist view position as it changes.</summary>
+    public Action<double, double, double>? ViewStateSink { get; set; }
+    public void ReportViewState(double zoom, double ox, double oy) => ViewStateSink?.Invoke(zoom, ox, oy);
+
     // Text-box annotation defaults (from config).
     public double TextboxFontSize { get; set; } = 14;
     public AnnotColor TextboxFrameColor { get; set; } = AnnotColor.Blue;
@@ -199,12 +205,16 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public PdfAnnotationModel? SelectedAnnotation { get; private set; }
     private PageViewModel? _selectedAnnotationPage;
 
+    [ObservableProperty] private AnnotationEditorViewModel? _annotationEditor;
+
     public void SelectAnnotation(PageViewModel? page, PdfAnnotationModel? annotation)
     {
         if (ReferenceEquals(SelectedAnnotation, annotation)) return;
         var oldPage = _selectedAnnotationPage;
         SelectedAnnotation = annotation;
         _selectedAnnotationPage = annotation is null ? null : page;
+        AnnotationEditor = annotation is not null && page is not null
+            ? new AnnotationEditorViewModel(this, page, annotation) : null;
         oldPage?.NotifyAnnotationChanged();
         page?.NotifyAnnotationChanged();
     }
@@ -458,6 +468,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
         SelectedAnnotation = null;
         _selectedAnnotationPage = null;
+        AnnotationEditor = null;
         MarkDirty();
     }
 

@@ -1,37 +1,57 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NoPdf.App.ViewModels"
-             xmlns:sys="using:System"
+             xmlns:conv="using:NoPdf.App.Converters"
              x:Class="NoPdf.App.Views.CommandBar"
              x:DataType="vm:CommandBarViewModel"
              IsVisible="{Binding IsVisible}">
-    <Border Background="#1E1E1E" Padding="8,4">
-        <DockPanel>
-            <!-- Command history (most recent first) -->
-            <ListBox DockPanel.Dock="Top" x:Name="HistoryList"
-                     ItemsSource="{Binding History}" MaxHeight="150"
-                     Background="Transparent" BorderThickness="0"
-                     Margin="0,0,0,4" SelectionChanged="OnHistoryPick"
-                     IsVisible="{Binding History.Count}">
-                <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="sys:String">
-                        <TextBlock Text="{Binding}" Foreground="#9DB8C9"
-                                   FontFamily="Cascadia Code,Consolas,monospace" FontSize="12"/>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+    <UserControl.Styles>
+        <!-- Strip the Fluent TextBox chrome so it blends into the bar and the
+             text is always visible regardless of OS theme. -->
+        <Style Selector="TextBox.cmd">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBox.cmd /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="TextBox.cmd:focus /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+    </UserControl.Styles>
 
-            <StackPanel Orientation="Horizontal" Spacing="6">
-                <TextBlock Text="{Binding Prompt}" Foreground="#7FD4FF"
-                           FontFamily="Cascadia Code,Consolas,monospace" FontSize="14"
-                           VerticalAlignment="Center"/>
-                <TextBox x:Name="Input" Text="{Binding Text, Mode=TwoWay}"
-                         BorderThickness="0" Background="Transparent"
-                         Foreground="#EEEEEE" CaretBrush="#EEEEEE"
-                         FontFamily="Cascadia Code,Consolas,monospace" FontSize="14"
-                         Padding="0" MinWidth="600"
+    <Border Background="{DynamicResource CommandBackground}" Padding="10,5">
+        <StackPanel Spacing="2">
+            <!-- Command history (oldest → newest, no scrollbar) -->
+            <ItemsControl ItemsSource="{Binding Visible}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CmdHistoryItem">
+                        <TextBlock Text="{Binding Text}"
+                                   FontFamily="Cascadia Code,Consolas,monospace" FontSize="13"
+                                   Foreground="{DynamicResource CommandHistory}"
+                                   Opacity="{Binding Current, Converter={x:Static conv:BoolOpacityConverter.Instance}}"
+                                   Padding="16,1"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Input line: prompt + text, vertically centred together -->
+            <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                <TextBlock Grid.Column="0" Text="{Binding Prompt}"
+                           Foreground="{DynamicResource CommandPrompt}"
+                           FontFamily="Cascadia Code,Consolas,monospace" FontSize="15"
+                           VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <TextBox Grid.Column="1" x:Name="Input" Classes="cmd"
+                         Text="{Binding Text, Mode=TwoWay}"
+                         Foreground="{DynamicResource CommandForeground}"
+                         CaretBrush="{DynamicResource CommandForeground}"
+                         FontFamily="Cascadia Code,Consolas,monospace" FontSize="15"
                          VerticalAlignment="Center"/>
-            </StackPanel>
-        </DockPanel>
+            </Grid>
+        </StackPanel>
     </Border>
 </UserControl>

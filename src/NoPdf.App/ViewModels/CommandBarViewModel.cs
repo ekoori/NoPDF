@@ -13,6 +13,7 @@ public sealed partial class CommandBarViewModel : ViewModelBase
 {
     private readonly MainWindowViewModel _main;
     private readonly int _maxHistory;
+    private readonly int _visibleCount;
     private readonly string _historyPath;
     private readonly List<string> _history = new();
     private int _historyPos;
@@ -21,16 +22,17 @@ public sealed partial class CommandBarViewModel : ViewModelBase
     [ObservableProperty] private string _prompt = ":";
     [ObservableProperty] private string _text = "";
 
-    /// <summary>Previously executed command lines, most recent first (for display).</summary>
-    public ObservableCollection<string> History { get; } = new();
+    /// <summary>A fixed window of history lines shown above the input (no scrollbar).</summary>
+    public ObservableCollection<CmdHistoryItem> Visible { get; } = new();
 
     /// <summary>Raised when the bar opens so the view can focus/caret the input.</summary>
     public event Action? Opened;
 
-    public CommandBarViewModel(MainWindowViewModel main, int maxHistory)
+    public CommandBarViewModel(MainWindowViewModel main, int maxHistory, int visibleCount)
     {
         _main = main;
         _maxHistory = Math.Max(10, maxHistory);
+        _visibleCount = Math.Clamp(visibleCount, 1, 12);
         var dir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NoPdf");
         Directory.CreateDirectory(dir);
@@ -43,8 +45,24 @@ public sealed partial class CommandBarViewModel : ViewModelBase
         Prompt = prompt;
         Text = initial;
         _historyPos = _history.Count;
+        BuildVisible();
         IsVisible = true;
         Opened?.Invoke();
+    }
+
+    /// <summary>Rebuilds the fixed-size window of history lines around the cursor.</summary>
+    private void BuildVisible()
+    {
+        Visible.Clear();
+        int total = _history.Count;
+        if (total == 0) return;
+        int n = Math.Min(_visibleCount, total);
+        int cur = _historyPos; // total == "empty input"
+        int start = cur >= total
+            ? Math.Max(0, total - n)
+            : Math.Clamp(cur - n / 2, 0, Math.Max(0, total - n));
+        for (int i = start; i < start + n && i < total; i++)
+            Visible.Add(new CmdHistoryItem(_history[i], i == cur));
     }
 
     public void Cancel()
@@ -75,14 +93,16 @@ public sealed partial class CommandBarViewModel : ViewModelBase
         if (_history.Count == 0) return;
         _historyPos = Math.Max(0, _historyPos - 1);
         SetFromHistory();
+        BuildVisible();
     }
 
     public void HistoryNext()
     {
         if (_history.Count == 0) return;
         _historyPos = Math.Min(_history.Count, _historyPos + 1);
-        if (_historyPos == _history.Count) { Text = ""; return; }
+        if (_historyPos == _history.Count) { Text = ""; BuildVisible(); return; }
         SetFromHistory();
+        BuildVisible();
     }
 
     private void SetFromHistory()
@@ -98,10 +118,6 @@ public sealed partial class CommandBarViewModel : ViewModelBase
         _history.Add(entry);
         if (_history.Count > _maxHistory) _history.RemoveRange(0, _history.Count - _maxHistory);
         _historyPos = _history.Count;
-
-        History.Clear();
-        foreach (var h in Enumerable.Reverse(_history)) History.Add(h);
-
         try { File.WriteAllLines(_historyPath, _history); } catch { }
     }
 
@@ -114,9 +130,10 @@ public sealed partial class CommandBarViewModel : ViewModelBase
                 if (!string.IsNullOrWhiteSpace(line)) _history.Add(line);
             if (_history.Count > _maxHistory) _history.RemoveRange(0, _history.Count - _maxHistory);
             _historyPos = _history.Count;
-            History.Clear();
-            foreach (var h in Enumerable.Reverse(_history)) History.Add(h);
         }
         catch { }
     }
 }
+
+/// <summary>One history line shown above the command input.</summary>
+public sealed record CmdHistoryItem(string Text, bool Current);

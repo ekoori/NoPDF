@@ -66,17 +66,5 @@ public partial class CommandBar : UserControl
     {
         if (_input is not null) _input.CaretIndex = _input.Text?.Length ?? 0;
     }
-
-    private void OnHistoryPick(object? sender, SelectionChangedEventArgs e)
-    {
-        if (_vm is null) return;
-        if (e.AddedItems.Count > 0 && e.AddedItems[0] is string entry)
-        {
-            _vm.FillFromHistory(entry.StartsWith('/') ? entry[1..] : entry);
-            _input?.Focus();
-            MoveCaretToEnd();
-            if (sender is ListBox lb) lb.SelectedItem = null;
-        }
-    }
 }
 

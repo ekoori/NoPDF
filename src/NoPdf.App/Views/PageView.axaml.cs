@@ -138,7 +138,8 @@ public partial class PageView : UserControl
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        if (_current is null || _mode == Mode.None) return;
+        if (_current is null) return;
+        if (_mode == Mode.None) { UpdateHoverCursor(AreaPos(e)); return; }
         var page = ToPage(AreaPos(e));
 
         switch (_mode)
@@ -440,6 +441,60 @@ public partial class PageView : UserControl
         => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
 
     private static double Area(TextRect r) => Math.Abs(r.Width * r.Height);
+
+    // ---------- hover cursor ----------
+
+    private static readonly Cursor CArrow = new(StandardCursorType.Arrow);
+    private static readonly Cursor CIbeam = new(StandardCursorType.Ibeam);
+    private static readonly Cursor CCross = new(StandardCursorType.Cross);
+    private static readonly Cursor CMove = new(StandardCursorType.SizeAll);
+    private static readonly Cursor CNS = new(StandardCursorType.SizeNorthSouth);
+    private static readonly Cursor CWE = new(StandardCursorType.SizeWestEast);
+    private static readonly Cursor CTL = new(StandardCursorType.TopLeftCorner);
+    private static readonly Cursor CTR = new(StandardCursorType.TopRightCorner);
+    private static readonly Cursor CBL = new(StandardCursorType.BottomLeftCorner);
+    private static readonly Cursor CBR = new(StandardCursorType.BottomRightCorner);
+
+    private void UpdateHoverCursor(Point pos)
+    {
+        if (_current is null) return;
+        var page = ToPage(pos);
+        Cursor cursor = CArrow;
+        switch (_current.Owner.CurrentTool)
+        {
+            case EditorTool.Hand: return; // DocumentView sets the hand cursor
+            case EditorTool.Zoom:
+            case EditorTool.Line or EditorTool.Rectangle or EditorTool.Arrow
+                or EditorTool.Polyline or EditorTool.Note or EditorTool.TextBox or EditorTool.Callout:
+                cursor = CCross; break;
+            case EditorTool.Highlight:
+                cursor = CIbeam; break;
+            case EditorTool.Select:
+                var sel = Owner!.SelectedAnnotation;
+                if (sel is not null && _current.Annotations.Contains(sel))
+                {
+                    int id = HandleAt(sel, pos);
+                    if (id != int.MinValue) { cursor = CursorForHandle(sel, id); break; }
+                }
+                if (_current.HitTestAnnotation(page.X, page.Y, 5) is not null) cursor = CMove;
+                else if (_current.IsOverText(page.X, page.Y)) cursor = CIbeam;
+                else cursor = CArrow;
+                break;
+        }
+        if (!ReferenceEquals(Cursor, cursor)) Cursor = cursor;
+    }
+
+    private static Cursor CursorForHandle(PdfAnnotationModel a, int id)
+    {
+        if (a is LineAnnotation or PolylineAnnotation) return CCross;
+        if (a is CalloutAnnotation && id == AnnotationGeometry.TipHandle) return CCross;
+        return id switch
+        {
+            0 => CBL, 1 => CNS, 2 => CBR, 3 => CWE,
+            4 => CTR, 5 => CNS, 6 => CTL, 7 => CWE,
+            _ => CMove,
+        };
+    }
 
     private void EnsureGestureUndo()
     {
