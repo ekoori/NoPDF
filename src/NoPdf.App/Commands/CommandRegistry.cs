@@ -76,6 +76,13 @@ public sealed class CommandRegistry
             ["fit"] = (_, _) => Task.FromResult(Fit(false)),
             ["fitwidth"] = (_, _) => Task.FromResult(Fit(true)),
             ["copy"] = (_, _) => { _main.RequestCopy(); return Msg(null); },
+            ["copypath"] = (_, _) =>
+            {
+                var p = Doc?.FilePath;
+                if (string.IsNullOrEmpty(p)) return Msg("No document");
+                _main.RequestCopyText(p); return Msg("Copied path");
+            },
+            ["session"] = Session, ["sess"] = Session,
             ["scrolldown"] = (_, _) => Scroll(0, +1),
             ["scrollup"] = (_, _) => Scroll(0, -1),
             ["scrollleft"] = (_, _) => Scroll(-1, 0),
@@ -420,6 +427,32 @@ public sealed class CommandRegistry
         if (!File.Exists(path)) return $"File missing: {path}";
         await _main.OpenPathAsync(path);
         return null;
+    }
+
+    private async Task<string?> Session(string[] args, string rest)
+    {
+        string sub = args.Length > 0 ? args[0].ToLowerInvariant() : "list";
+        string name = args.Length > 1 ? string.Join(' ', args.Skip(1)) : "";
+        switch (sub)
+        {
+            case "save" or "s":
+                if (name.Length == 0) return "Usage: session save <name>";
+                _main.SaveNamedSession(name);
+                return $"Saved session '{name}' ({_main.Tabs.Count} tabs)";
+            case "load" or "l" or "open":
+                if (name.Length == 0) return "Usage: session load <name>";
+                if (_main.Session.GetNamed(name) is null) return $"No session: {name}";
+                await _main.LoadNamedSessionAsync(name);
+                return $"Loaded session '{name}'";
+            case "del" or "delete" or "rm":
+                if (name.Length == 0) return "Usage: session del <name>";
+                return _main.Session.DeleteNamed(name) ? $"Deleted session '{name}'" : $"No session: {name}";
+            case "list":
+                var names = _main.Session.NamedSessions();
+                return names.Count == 0 ? "No saved sessions" : "Sessions: " + string.Join(", ", names);
+            default:
+                return "Usage: session <save|load|del|list> [name]";
+        }
     }
 
     private Task<string?> Bookmark(string[] args, string rest)

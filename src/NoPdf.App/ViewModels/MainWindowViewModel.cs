@@ -27,6 +27,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private bool _isAnnotationPanelOpen;
 
     public bool HasDocument => SelectedTab is not null;
+    public bool IsTitlebarHidden => !Config.ShowTitlebar;
 
     /// <summary>Set by the view; opens the native file picker and returns chosen paths.</summary>
     public Func<Task<IReadOnlyList<string>>>? OpenFilePicker { get; set; }
@@ -56,6 +57,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// <summary>Set by the view; copies the current selection to the clipboard.</summary>
     public Func<Task>? CopyHandler { get; set; }
     public void RequestCopy() { if (CopyHandler is not null) _ = CopyHandler(); }
+
+    /// <summary>Set by the view; copies arbitrary text to the clipboard.</summary>
+    public Func<string, Task>? CopyTextHandler { get; set; }
+    public void RequestCopyText(string text) { if (CopyTextHandler is not null) _ = CopyTextHandler(text); }
 
     /// <summary>Raised when the user runs :quit.</summary>
     public event Action? QuitRequested;
@@ -113,13 +118,29 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>Reopens the files from the previous session.</summary>
-    public async Task RestoreSessionAsync()
+    public Task RestoreSessionAsync() => OpenSessionAsync(Session.Load(), replace: false);
+
+    public void SaveNamedSession(string name)
+        => Session.SaveNamed(name, new SessionStore.SessionData
+        {
+            Files = Tabs.Select(t => t.FilePath).ToList(),
+            Active = SelectedTab is not null ? Tabs.IndexOf(SelectedTab) : -1,
+        });
+
+    public Task LoadNamedSessionAsync(string name)
+        => OpenSessionAsync(Session.GetNamed(name), replace: true);
+
+    private async Task OpenSessionAsync(SessionStore.SessionData? data, bool replace)
     {
-        var data = Session.Load();
         if (data is null || data.Files.Count == 0) return;
         _restoring = true;
         try
         {
+            if (replace)
+            {
+                foreach (var t in Tabs.ToList()) t.Dispose();
+                Tabs.Clear();
+            }
             foreach (var f in data.Files)
                 if (File.Exists(f)) await OpenPathAsync(f, forceNewTab: true);
         }

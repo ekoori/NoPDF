@@ -18,6 +18,7 @@ public sealed class AppConfig
 {
     public string Theme { get; set; } = "dark";        // dark | light | inherit
     public bool ShowToolbar { get; set; } = false;
+    public bool ShowTitlebar { get; set; } = false;
     public int CommandHistorySize { get; set; } = 200;
 
     /// <summary>Number of history lines shown above the command line.</summary>
@@ -112,30 +113,64 @@ public sealed class AppConfig
 #   <space> <tab> <cr> <esc> <bs> <del>
 # Multi-key sequences just concatenate, e.g. "gg", "z w"→ zw, "<space>f".
 #
-# ── ALL COMMANDS (bind any of these to any key) ───────────────────────
-#   Files/tabs: open <path>          open (reuses a tab for the same file)
-#               O <path> / tabnew    open in a NEW tab
-#               tabnext tabprev tabclose
-#               close  quit
-#   Navigate:   page <n|first|last|next|prev>
-#               scrollup scrolldown scrollleft scrollright
-#               scrollpageup scrollpagedown
-#   Zoom:       zoom <pct|in|out|reset|width|page>
-#   Find:       find <text>   findnext   findprev
-#   Tools:      hand select highlight note textbox callout
-#               line rect arrow polyline
-#   Annotate:   delannot          delete the selected annotation
-#   Edit:       undo  redo  copy
-#   Pages:      rotate <range> [cw|ccw|180]   delete <range>
-#               insert <path> [at]   merge <path>   extract <range> <path>
-#   Panels:     toc (bookmarks)   pages (thumbnails)
-#   Marks:      m <name> / go <name>   (file quickmarks)
-#               bookmark <name> / bmdel <name>   (page bookmarks)
-#   Misc:       print [range]   save [path]   saveas <path>   help
+# ── ALL COMMANDS ──────────────────────────────────────────────────────
+# Every command is listed below (commented out). Uncomment a line under
+# `normal_bindings:` in the form `key: command` to bind it to a key.
+#
+#   # Files / tabs
+#   open <path>            open a file (reuses a tab for the same file)
+#   O <path>  / tabnew      open in a NEW tab
+#   tabnext                 next tab
+#   tabprev                 previous tab
+#   tabclose                close current tab
+#   close                   close current tab
+#   quit                    exit the app
+#   copypath                copy the current file's full path
+#
+#   # Sessions (all tabs)
+#   session save <name>     save the open tabs under a name
+#   session load <name>     replace tabs with a saved session
+#   session del <name>      delete a saved session
+#   session list            list saved sessions
+#
+#   # Navigate
+#   page <n|first|last|next|prev>
+#   scrollup / scrolldown / scrollleft / scrollright
+#   scrollpageup / scrollpagedown
+#
+#   # Zoom
+#   zoom <pct|in|out|reset|width|page>
+#
+#   # Find
+#   find <text> / findnext / findprev
+#
+#   # Tools
+#   hand  select  highlight  note  textbox  callout  line  rect  arrow  polyline
+#
+#   # Edit
+#   undo  redo  copy  delannot   (delannot = delete selected annotation)
+#
+#   # Pages
+#   rotate <range> [cw|ccw|180]   delete <range>
+#   insert <path> [at]   merge <path>   extract <range> <path>
+#
+#   # Panels / UI
+#   toc        toggle bookmarks panel
+#   pages      toggle thumbnails panel
+#   props      toggle annotation properties panel
+#   toolbar    toggle the icon toolbar
+#
+#   # Marks
+#   m <name> / go <name>          file quickmarks
+#   bookmark <name> / bmdel <name>  page bookmarks
+#
+#   # Misc
+#   print [range]   save [path]   saveas <path>   help
 # ──────────────────────────────────────────────────────────────────────
 
 theme: dark               # dark | light | inherit (follow the OS)
 show_toolbar: false       # the icon toolbar is hidden by default
+show_titlebar: false      # hide the OS window title bar (min/max/close)
 command_history_size: 200
 history_visible: 5        # history lines shown above the ":" line
 scroll_rows: 3
@@ -193,7 +228,8 @@ normal_bindings:
   zp: zoom page
   b: toc
   P: pages
-  yy: copy
+  yy: copy                # copy the selected text
+  YY: copypath            # copy the current file's full path
 
 # Extra bindings (merged with normal_bindings).
 search_bindings: {}

@@ -25,6 +25,7 @@ public partial class MainWindow : Window
             OpenSingleFilePicker = PickSinglePdfAsync,
             SaveAsPicker = PickSaveAsAsync,
             CopyHandler = CopySelectionAsync,
+            CopyTextHandler = CopyTextAsync,
         };
         vm.QuitRequested += () =>
         {
@@ -33,6 +34,11 @@ public partial class MainWindow : Window
                 desktop.Shutdown();
         };
         DataContext = vm;
+
+        // Hide the OS title bar (icon + min/max/close) unless the config re-enables
+        // it. BorderOnly keeps a resize border; the drag strip moves the window.
+        if (!vm.Config.ShowTitlebar)
+            SystemDecorations = Avalonia.Controls.WindowDecorations.BorderOnly;
 
         AddHandler(KeyDownEvent, OnGlobalKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
 
@@ -59,6 +65,15 @@ public partial class MainWindow : Window
 
     private void OnCommandButtonClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
         => Vm.CommandBar.Open(":");
+
+    private void OnDragStripPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            BeginMoveDrag(e);
+    }
+
+    private void OnDragStripDoubleTapped(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
     private void OnOutlineSelected(object? sender, SelectionChangedEventArgs e)
         => NavigateToBookmark(e);
@@ -238,14 +253,24 @@ public partial class MainWindow : Window
     {
         var text = Vm.GetSelectionText();
         if (string.IsNullOrEmpty(text)) return;
+        await PutOnClipboardAsync(text);
+        Vm.StatusText = $"Copied {text.Length} chars";
+    }
+
+    private async Task CopyTextAsync(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        await PutOnClipboardAsync(text);
+        Vm.StatusText = $"Copied: {text}";
+    }
+
+    private async Task PutOnClipboardAsync(string text)
+    {
         var clipboard = GetTopLevel(this)?.Clipboard;
-        if (clipboard is not null)
-        {
-            var data = new DataTransfer();
-            data.Add(DataTransferItem.CreateText(text));
-            await clipboard.SetDataAsync(data);
-            Vm.StatusText = $"Copied {text.Length} chars";
-        }
+        if (clipboard is null) return;
+        var data = new DataTransfer();
+        data.Add(DataTransferItem.CreateText(text));
+        await clipboard.SetDataAsync(data);
     }
 
     private async Task<IReadOnlyList<string>> PickPdfFilesAsync()

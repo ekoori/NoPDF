@@ -43,11 +43,22 @@ public partial class App : Application
             {
                 Dispatcher.UIThread.Post(async () =>
                 {
-                    if (pdfs.Length > 0)
-                        foreach (var p in pdfs) await vm.OpenPathAsync(p);
-                    else
-                        await vm.RestoreSessionAsync();
+                    // Always restore the last session, then add any file passed on launch.
+                    await vm.RestoreSessionAsync();
+                    foreach (var p in pdfs) await vm.OpenPathAsync(p, forceNewTab: true);
                 });
+
+                // Secondary launches forward their files here.
+                SingleInstance.StartServer(paths => Dispatcher.UIThread.Post(async () =>
+                {
+                    window.Show();
+                    window.Activate();
+                    if (window.WindowState == Avalonia.Controls.WindowState.Minimized)
+                        window.WindowState = Avalonia.Controls.WindowState.Normal;
+                    foreach (var p in paths)
+                        if (File.Exists(p) && p.EndsWith(".pdf", System.StringComparison.OrdinalIgnoreCase))
+                            await vm.OpenPathAsync(p, forceNewTab: true);
+                }));
             }
         }
 

@@ -13,7 +13,7 @@
         x:Name="Root"
         Width="1100" Height="720"
         Icon="/Assets/nopdf.ico"
-        Title="NoPdf">
+        Title="noPDF">
 
     <Window.Resources>
         <conv:EnumEqualsConverter x:Key="EnumEq"/>
@@ -112,6 +112,11 @@
     </Window.Styles>
 
     <DockPanel LastChildFill="True">
+
+        <!-- ===== Drag strip (shown when the OS title bar is hidden) ===== -->
+        <Border DockPanel.Dock="Top" Height="6" Background="{DynamicResource ChromeBackground}"
+                x:Name="DragStrip" IsVisible="{Binding IsTitlebarHidden}"
+                PointerPressed="OnDragStripPressed" DoubleTapped="OnDragStripDoubleTapped"/>
 
         <!-- ===== Toolbar ===== -->
         <Border DockPanel.Dock="Top" Background="{DynamicResource ChromeBackground}" BorderBrush="{DynamicResource ChromeBorder}"
@@ -413,11 +418,33 @@
                             <StackPanel Spacing="4" IsVisible="{Binding HasFill}">
                                 <CheckBox Content="Fill" IsChecked="{Binding FillEnabled}" FontSize="12"/>
                                 <TextBox Text="{Binding FillHex}" IsEnabled="{Binding FillEnabled}" FontSize="12"/>
+                                <ItemsControl ItemsSource="{Binding Palette}" IsEnabled="{Binding FillEnabled}">
+                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="sys:String">
+                                            <Button Width="22" Height="22" Margin="0,2,4,0" Padding="0"
+                                                    Background="{Binding Converter={StaticResource HexBrush}}"
+                                                    Command="{Binding $parent[ItemsControl].((vm:AnnotationEditorViewModel)DataContext).PickFillCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
                             </StackPanel>
 
                             <StackPanel Spacing="4" IsVisible="{Binding HasTextColor}">
                                 <TextBlock Classes="muted" Text="Text colour" FontSize="11"/>
                                 <TextBox Text="{Binding TextHex}" FontSize="12"/>
+                                <ItemsControl ItemsSource="{Binding Palette}">
+                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="sys:String">
+                                            <Button Width="22" Height="22" Margin="0,2,4,0" Padding="0"
+                                                    Background="{Binding Converter={StaticResource HexBrush}}"
+                                                    Command="{Binding $parent[ItemsControl].((vm:AnnotationEditorViewModel)DataContext).PickTextCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
                             </StackPanel>
 
                             <StackPanel Spacing="2" IsVisible="{Binding HasFont}">
