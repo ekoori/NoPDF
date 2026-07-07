@@ -12,6 +12,7 @@
         x:DataType="vm:MainWindowViewModel"
         x:Name="Root"
         Width="1100" Height="720"
+        Icon="/Assets/nopdf.ico"
         Title="NoPdf">
 
     <Window.Resources>
