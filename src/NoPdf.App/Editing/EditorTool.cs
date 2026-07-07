@@ -14,4 +14,5 @@ public enum EditorTool
     Rectangle,
     Arrow,
     Polyline,
+    Signature, // place a signature stamp
 }

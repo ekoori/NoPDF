@@ -32,6 +32,7 @@ public sealed class CommandRegistry
         ["box"] = EditorTool.Rectangle, ["rect"] = EditorTool.Rectangle, ["rectangle"] = EditorTool.Rectangle,
         ["arrow"] = EditorTool.Arrow,
         ["poly"] = EditorTool.Polyline, ["polyline"] = EditorTool.Polyline,
+        ["sign"] = EditorTool.Signature, ["signature"] = EditorTool.Signature,
     };
 
     public CommandRegistry(MainWindowViewModel main, Quickmarks quickmarks)
@@ -64,6 +65,9 @@ public sealed class CommandRegistry
             ["toc"] = (_, _) => Task.FromResult(ToggleToc()),
             ["pages"] = (_, _) => Task.FromResult(TogglePages()),
             ["toolbar"] = (_, _) => { _main.ToggleToolbarCommand.Execute(null); return Msg(_main.IsToolbarVisible ? "Toolbar shown" : "Toolbar hidden"); },
+            ["config"] = (_, _) => Config(),
+            ["bind"] = Bind,
+            ["signatures"] = (_, _) => Msg(ListSignatures()),
             ["props"] = (_, _) => { _main.ToggleAnnotationPanelCommand.Execute(null); return Msg(_main.IsAnnotationPanelOpen ? "Annotation panel shown" : "Annotation panel hidden"); },
             ["annot"] = (_, _) => { _main.ToggleAnnotationPanelCommand.Execute(null); return Msg(null); },
             ["rotate"] = Rotate,
@@ -445,6 +449,47 @@ public sealed class CommandRegistry
         if (!File.Exists(path)) return $"File missing: {path}";
         await _main.OpenPathAsync(path);
         return null;
+    }
+
+    private string? ListSignatures()
+    {
+        var doc = Doc;
+        if (doc is null) return "No document";
+        var sigs = doc.AllAnnotations().OfType<SignatureAnnotation>().ToList();
+        int embedded = 0;
+        try { embedded = doc.Document?.GetSignatureCount() ?? 0; } catch { }
+        if (sigs.Count == 0 && embedded == 0) return "No signatures";
+        var parts = new List<string>();
+        foreach (var s in sigs) parts.Add($"{s.SignerName} ({s.Signed:yyyy-MM-dd HH:mm})");
+        if (embedded > 0) parts.Add($"{embedded} embedded digital signature(s)");
+        return "Signatures: " + string.Join("; ", parts);
+    }
+
+    private Task<string?> Config()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                NoPdf.App.Config.AppConfig.ConfigPath) { UseShellExecute = true });
+            return Msg("Opened config");
+        }
+        catch (Exception ex) { return Msg($"Couldn't open config: {ex.Message}"); }
+    }
+
+    private Task<string?> Bind(string[] args, string rest)
+    {
+        if (args.Length < 2)
+            return Msg("Usage: bind <key> <command>   (alias: bind :w save)");
+        string key = args[0];
+        string command = string.Join(' ', args.Skip(1));
+        if (key.StartsWith(':'))
+        {
+            string alias = key.TrimStart(':');
+            _main.AddAlias(alias, command);
+            return Msg($"Alias :{alias} → {command}");
+        }
+        _main.AddBinding(key, command);
+        return Msg($"Bound {key} → {command}");
     }
 
     private async Task<string?> Session(string[] args, string rest)

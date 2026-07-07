@@ -126,6 +126,16 @@ public partial class PageView : UserControl
                     BorderOpacity = _current.Owner.TextboxFrameOpacity,
                 }, page, e);
                 break;
+            case EditorTool.Signature:
+                BeginDraw(new SignatureAnnotation
+                {
+                    PageIndex = _current.PageIndex,
+                    Rect = new TextRect(page.X, page.Y, page.X, page.Y),
+                    SignerName = string.IsNullOrWhiteSpace(_current.Owner.SignerName) ? "Signature" : _current.Owner.SignerName,
+                    Signed = System.DateTime.Now,
+                    Color = _current.Owner.TextboxFrameColor,
+                }, page, e);
+                break;
             case EditorTool.Note:
                 CreateNote(page, e);
                 break;
@@ -266,6 +276,9 @@ public partial class PageView : UserControl
                 _current.SetDraft(null); return;
             case SquareAnnotation s when Area(s.Rect) < 9:
                 _current.SetDraft(null); return;
+            case SignatureAnnotation sig when Area(sig.Rect) < 400:
+                sig.Rect = new TextRect(sig.Rect.Left, sig.Rect.Top - 72, sig.Rect.Left + 240, sig.Rect.Top);
+                break;
             case FreeTextAnnotation f when Area(f.Rect) < 100:
                 f.Rect = DefaultRectAt(new PdfPoint(f.Rect.Left, f.Rect.Top)); break;
         }
@@ -275,7 +288,8 @@ public partial class PageView : UserControl
         Owner!.SelectAnnotation(_current, ann);
         // Switch to Select so the new annotation can be moved/resized immediately.
         Owner.SelectTool(EditorTool.Select);
-        if (ann is FreeTextAnnotation ft) OpenEditor(ft, isNew: true);
+        // Signatures get their note from the properties panel, not an inline editor.
+        if (ann is FreeTextAnnotation ft and not SignatureAnnotation) OpenEditor(ft, isNew: true);
     }
 
     private void CreateNote(PdfPoint page, PointerPressedEventArgs e)
@@ -465,7 +479,8 @@ public partial class PageView : UserControl
             case EditorTool.Hand: return; // DocumentView sets the hand cursor
             case EditorTool.Zoom:
             case EditorTool.Line or EditorTool.Rectangle or EditorTool.Arrow
-                or EditorTool.Polyline or EditorTool.Note or EditorTool.TextBox or EditorTool.Callout:
+                or EditorTool.Polyline or EditorTool.Note or EditorTool.TextBox
+                or EditorTool.Callout or EditorTool.Signature:
                 cursor = CCross; break;
             case EditorTool.Highlight:
                 cursor = CIbeam; break;

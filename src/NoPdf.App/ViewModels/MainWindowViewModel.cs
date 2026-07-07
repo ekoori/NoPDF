@@ -192,6 +192,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             doc.TextboxFontSize = Config.TextboxFontSize;
             doc.TextboxFrameColor = Config.TextboxFrameColorValue;
             doc.TextboxFrameOpacity = Config.TextboxFrameOpacity;
+            doc.SignerName = Config.SignerName;
             var saved = ViewStates.Get(path);
             if (saved is not null) doc.InitialView = (saved.Zoom, saved.OffsetX, saved.OffsetY);
             doc.ViewStateSink = (z, x, y) => ViewStates.Set(path, z, x, y);
@@ -268,6 +269,19 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private void Redo() => SelectedTab?.Redo();
 
     // ----- Config hot-reload -----
+
+    public void AddBinding(string key, string command)
+    {
+        Config.NormalBindings[key] = command;
+        KeyBindings = new KeyBindingService(Config);
+        AppConfig.AddBindingToFile("normal_bindings", key, command);
+    }
+
+    public void AddAlias(string alias, string command)
+    {
+        Config.Aliases[alias] = command;
+        AppConfig.AddBindingToFile("aliases", alias, command);
+    }
 
     public void ReloadConfig()
     {

@@ -57,7 +57,21 @@ public sealed class PageOverlay : Control
 
         var sel = vm.Owner.SelectedAnnotation;
         if (sel is not null && vm.Annotations.Contains(sel))
+        {
+            DrawSelectionOutline(context, sel);
             DrawHandles(context, sel);
+        }
+    }
+
+    private static readonly IPen SelectionOutline = new Pen(
+        new SolidColorBrush(Color.FromRgb(0, 120, 215)), 1.25) { DashStyle = DashStyle.Dash };
+
+    private void DrawSelectionOutline(DrawingContext ctx, PdfAnnotationModel a)
+    {
+        // A dashed box around the bounds makes selection obvious even for
+        // annotations without resize handles (e.g. highlights).
+        var r = _t.ToDip(a.Bounds).Inflate(2);
+        ctx.DrawRectangle(null, SelectionOutline, r);
     }
 
     private void DrawAnnotation(DrawingContext ctx, PdfAnnotationModel a)
@@ -79,6 +93,11 @@ public sealed class PageOverlay : Control
                 IBrush? fill = s.Interior is { } ic
                     ? new SolidColorBrush(Color.FromRgb(ic.R, ic.G, ic.B)) : null;
                 ctx.DrawRectangle(fill, pen, rect);
+                break;
+            }
+            case SignatureAnnotation sig:
+            {
+                DrawSignature(ctx, sig, pen);
                 break;
             }
             case CalloutAnnotation c:
@@ -128,6 +147,44 @@ public sealed class PageOverlay : Control
         byte a = (byte)Math.Clamp((int)Math.Round(f.BorderOpacity * 255), 0, 255);
         return new Pen(new SolidColorBrush(Color.FromArgb(a, color.R, color.G, color.B)),
             Math.Max(1, f.StrokeWidth * _scale));
+    }
+
+    private static Avalonia.Media.Imaging.Bitmap? _sigLogo;
+    private static Avalonia.Media.Imaging.Bitmap? SigLogo()
+    {
+        if (_sigLogo is not null) return _sigLogo;
+        try
+        {
+            using var s = typeof(SignatureAnnotation).Assembly
+                .GetManifestResourceStream("NoPdf.Core.Assets.sig_logo.jpg");
+            if (s is not null) _sigLogo = new Avalonia.Media.Imaging.Bitmap(s);
+        }
+        catch { }
+        return _sigLogo;
+    }
+
+    private void DrawSignature(DrawingContext ctx, SignatureAnnotation sig, IPen pen)
+    {
+        var rect = ToDip(sig.Rect);
+        var color = Color.FromRgb(sig.Color.R, sig.Color.G, sig.Color.B);
+        ctx.FillRectangle(Brushes.White, rect);
+        var logo = SigLogo();
+        if (logo is not null)
+            ctx.DrawImage(logo, new Rect(logo.Size), rect);
+        ctx.DrawRectangle(null, pen, rect);
+
+        double s = _scale;
+        void Line(string text, double fontSize, Color c, double y)
+        {
+            var ft = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+                Typeface.Default, fontSize * s, new SolidColorBrush(c));
+            ctx.DrawText(ft, new Point(rect.X + 6, y));
+        }
+        double top = rect.Y + 5;
+        Line(sig.SignerName, 12, color, top);
+        double yy = top + 14 * s;
+        if (!string.IsNullOrWhiteSpace(sig.Contents)) { Line(sig.Contents!, 10, Color.FromRgb(33, 33, 33), yy); yy += 15 * s; }
+        Line("Signed " + sig.Signed.ToString("yyyy-MM-dd HH:mm"), 8, Color.FromRgb(110, 110, 110), yy);
     }
 
     private void DrawText(DrawingContext ctx, FreeTextAnnotation f, Rect rect)

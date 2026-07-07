@@ -44,6 +44,7 @@ public static class AnnotationWriter
             switch (ann)
             {
                 case HighlightAnnotation h: AddHighlight(doc, page, h); break;
+                case SignatureAnnotation sig: AddSignature(doc, page, sig); break;
                 case CalloutAnnotation c: AddCallout(doc, page, c); break;
                 case FreeTextAnnotation f: AddFreeText(doc, page, f); break;
                 case SquareAnnotation s: AddSquare(doc, page, s); break;
@@ -215,6 +216,85 @@ public static class AnnotationWriter
         }
         sb.Append("ET\n");
         return sb.ToString();
+    }
+
+    // ---------------- Signature ----------------
+
+    private const int LogoPx = 240;
+    private static byte[]? _logoJpeg;
+
+    private static byte[] LogoJpeg()
+    {
+        if (_logoJpeg is not null) return _logoJpeg;
+        using var s = typeof(AnnotationWriter).Assembly
+            .GetManifestResourceStream("NoPdf.Core.Assets.sig_logo.jpg");
+        using var ms = new System.IO.MemoryStream();
+        s!.CopyTo(ms);
+        return _logoJpeg = ms.ToArray();
+    }
+
+    private static void AddSignature(PdfDocument doc, PdfPage page, SignatureAnnotation sig)
+    {
+        var rc = sig.Rect;
+        var annot = NewAnnot(doc, page, "/Stamp", rc.Left, rc.Bottom, rc.Right, rc.Top, sig);
+        annot.Elements.SetName("/Name", "/#23noPDF"); // custom stamp name
+
+        // Faint watermark image XObject (JPEG / DCTDecode).
+        var logo = new PdfDictionary(doc);
+        doc.Internals.AddObject(logo);
+        logo.Elements.SetName("/Type", "/XObject");
+        logo.Elements.SetName("/Subtype", "/Image");
+        logo.Elements.SetInteger("/Width", LogoPx);
+        logo.Elements.SetInteger("/Height", LogoPx);
+        logo.Elements.SetName("/ColorSpace", "/DeviceRGB");
+        logo.Elements.SetInteger("/BitsPerComponent", 8);
+        logo.Elements.SetName("/Filter", "/DCTDecode");
+        logo.CreateStream(LogoJpeg());
+
+        // Appearance form with the image + Helvetica font in resources.
+        var form = new PdfDictionary(doc);
+        doc.Internals.AddObject(form);
+        form.Elements.SetName("/Type", "/XObject");
+        form.Elements.SetName("/Subtype", "/Form");
+        form.Elements["/BBox"] = Rect(doc, rc.Left, rc.Bottom, rc.Right, rc.Top);
+        form.Elements.SetInteger("/FormType", 1);
+        var xobj = new PdfDictionary(doc); xobj.Elements["/Sig"] = logo.Reference!;
+        var helv = new PdfDictionary(doc);
+        helv.Elements.SetName("/Type", "/Font"); helv.Elements.SetName("/Subtype", "/Type1");
+        helv.Elements.SetName("/BaseFont", "/Helvetica");
+        var fonts = new PdfDictionary(doc); fonts.Elements["/Helv"] = helv;
+        var res = new PdfDictionary(doc);
+        res.Elements["/XObject"] = xobj; res.Elements["/Font"] = fonts;
+        form.Elements["/Resources"] = res;
+
+        var sb = new StringBuilder();
+        // watermark fills the box
+        sb.Append("q ").Append(F(rc.Width)).Append(" 0 0 ").Append(F(rc.Height)).Append(' ')
+          .Append(F(rc.Left)).Append(' ').Append(F(rc.Bottom)).Append(" cm /Sig Do Q\n");
+        // border
+        sb.Append("1 w\n").Append(Col(sig.Color, true));
+        sb.Append(Re(rc.Left + 0.5, rc.Bottom + 0.5, rc.Width - 1, rc.Height - 1)).Append("S\n");
+        // text
+        double pad = 6;
+        double x = rc.Left + pad, top = rc.Top - pad;
+        sb.Append("BT\n");
+        sb.Append("/Helv 12 Tf ").Append(Col3(sig.Color)).Append(" rg\n");
+        sb.Append(F(x)).Append(' ').Append(F(top - 12)).Append(" Td (").Append(EscapePdf(sig.SignerName)).Append(") Tj\n");
+        double y = top - 12;
+        if (!string.IsNullOrWhiteSpace(sig.Contents))
+        {
+            y -= 16;
+            sb.Append("/Helv 10 Tf 0.13 0.13 0.13 rg\n");
+            sb.Append("0 -16 Td (").Append(EscapePdf(sig.Contents!)).Append(") Tj\n");
+        }
+        sb.Append("/Helv 8 Tf 0.4 0.4 0.4 rg\n");
+        sb.Append("0 -14 Td (Signed ").Append(EscapePdf(sig.Signed.ToString("yyyy-MM-dd HH:mm"))).Append(") Tj\n");
+        sb.Append("ET\n");
+        form.CreateStream(Encoding.ASCII.GetBytes(sb.ToString()));
+
+        var ap = new PdfDictionary(doc);
+        ap.Elements["/N"] = form.Reference!;
+        annot.Elements["/AP"] = ap;
     }
 
     // ---------------- Sticky note ----------------

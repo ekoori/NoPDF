@@ -205,6 +205,14 @@ public sealed class PdfDocument : IDisposable
         }
     }
 
+    /// <summary>Number of embedded (cryptographic) signature fields in the document.</summary>
+    public int GetSignatureCount()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        lock (PdfiumLibrary.Sync)
+            return fpdf_signature.FPDF_GetSignatureCount(_doc);
+    }
+
     /// <summary>Reads the document's bookmark outline (table of contents).</summary>
     public IReadOnlyList<OutlineItem> GetOutline()
     {

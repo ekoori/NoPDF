@@ -108,39 +108,49 @@ public partial class MainWindow : Window
     private int SelectedThumbIndex()
         => ThumbList.SelectedItem is PageThumbnail t ? t.PageIndex : (Vm.SelectedTab?.CurrentPage ?? 1) - 1;
 
+    private System.Collections.Generic.List<int> SelectedThumbIndices()
+    {
+        var list = ThumbList.SelectedItems?.OfType<PageThumbnail>().Select(t => t.PageIndex).OrderBy(i => i).ToList()
+                   ?? new System.Collections.Generic.List<int>();
+        if (list.Count == 0) list.Add(SelectedThumbIndex());
+        return list;
+    }
+
     private void OnThumbSelected(object? sender, SelectionChangedEventArgs e)
     {
-        if (e.AddedItems.Count > 0 && e.AddedItems[0] is PageThumbnail t)
+        if (e.AddedItems.Count > 0 && e.AddedItems[^1] is PageThumbnail t)
             Vm.SelectedTab?.GoToPage(t.PageNumber);
     }
 
     private void OnThumbRotateLeft(object? sender, RoutedEventArgs e)
-        => Vm.SelectedTab?.RotatePages(new[] { SelectedThumbIndex() }, -90);
+        => Vm.SelectedTab?.RotatePages(SelectedThumbIndices(), -90);
 
     private void OnThumbRotateRight(object? sender, RoutedEventArgs e)
-        => Vm.SelectedTab?.RotatePages(new[] { SelectedThumbIndex() }, 90);
+        => Vm.SelectedTab?.RotatePages(SelectedThumbIndices(), 90);
 
     private void OnThumbMoveUp(object? sender, RoutedEventArgs e)
     {
-        int i = SelectedThumbIndex();
+        int i = SelectedThumbIndices()[0];
         Vm.SelectedTab?.MovePage(i, i - 1);
     }
 
     private void OnThumbMoveDown(object? sender, RoutedEventArgs e)
     {
-        int i = SelectedThumbIndex();
+        int i = SelectedThumbIndices()[^1];
         Vm.SelectedTab?.MovePage(i, i + 1);
     }
 
     private void OnThumbDelete(object? sender, RoutedEventArgs e)
-        => Vm.SelectedTab?.DeletePages(new[] { SelectedThumbIndex() });
+        => Vm.SelectedTab?.DeletePages(SelectedThumbIndices());
 
     private async void OnThumbInsert(object? sender, RoutedEventArgs e)
     {
         var doc = Vm.SelectedTab;
         if (doc is null) return;
-        var path = await PickSinglePdfAsync();
-        if (path is not null) doc.InsertFile(path, SelectedThumbIndex() + 1);
+        var paths = await PickPdfFilesAsync();   // multiselect dialog
+        int at = SelectedThumbIndex() + 1;
+        foreach (var path in paths)
+            at += doc.InsertFile(path, at);
     }
 
     private async void OnRecentClick(object? sender, RoutedEventArgs e)

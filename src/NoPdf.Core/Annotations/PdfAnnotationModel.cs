@@ -174,6 +174,23 @@ public sealed class CalloutAnnotation : FreeTextAnnotation
     }
 }
 
+/// <summary>
+/// A visible signature stamp: signer name, optional note, timestamp, over a faint
+/// noPDF watermark. Extends free text so it shares rect handles/hit-testing.
+/// </summary>
+public sealed class SignatureAnnotation : FreeTextAnnotation
+{
+    public string SignerName { get; set; } = "";
+    public System.DateTime Signed { get; set; } = System.DateTime.Now;
+
+    public override PdfAnnotationModel Clone()
+    {
+        var c = new SignatureAnnotation { SignerName = SignerName, Signed = Signed };
+        CopyFreeTextTo(c);
+        return c;
+    }
+}
+
 /// <summary>Sticky note icon (PDF <c>/Text</c>). <see cref="PdfAnnotationModel.Contents"/> holds the note.</summary>
 public sealed class StickyNoteAnnotation : PdfAnnotationModel
 {

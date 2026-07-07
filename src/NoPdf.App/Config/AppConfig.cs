@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using NoPdf.Core.Annotations;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -19,6 +20,10 @@ public sealed class AppConfig
     public string Theme { get; set; } = "dark";        // dark | light | inherit
     public bool ShowToolbar { get; set; } = false;
     public bool ShowTitlebar { get; set; } = false;
+
+    /// <summary>Name used on signatures; falls back to the OS user name if blank.</summary>
+    public string UserName { get; set; } = "";
+    public string SignerName => string.IsNullOrWhiteSpace(UserName) ? Environment.UserName : UserName;
     public int CommandHistorySize { get; set; } = 200;
 
     /// <summary>Number of history lines shown above the command line.</summary>
@@ -74,6 +79,47 @@ public sealed class AppConfig
             error = $"Config error ({ex.Message}); using defaults";
             return Parse(DefaultYaml);
         }
+    }
+
+    /// <summary>
+    /// Inserts or updates <c>key: value</c> under a top-level mapping (e.g.
+    /// "normal_bindings" or "aliases") in the config file, preserving comments.
+    /// </summary>
+    public static void AddBindingToFile(string section, string key, string value)
+    {
+        try
+        {
+            var path = ConfigPath;
+            var lines = File.Exists(path) ? File.ReadAllLines(path).ToList() : new List<string>();
+            string yKey = key.All(c => char.IsLetterOrDigit(c)) ? key : $"\"{key}\"";
+            string entry = $"  {yKey}: {value}";
+
+            int header = lines.FindIndex(l =>
+                l.TrimStart().StartsWith(section + ":") && !l.TrimStart().StartsWith("#"));
+            if (header < 0)
+            {
+                lines.Add(section + ":");
+                lines.Add(entry);
+            }
+            else
+            {
+                int existing = -1, insertAt = header + 1;
+                for (int j = header + 1; j < lines.Count; j++)
+                {
+                    var l = lines[j];
+                    if (l.Length > 0 && !char.IsWhiteSpace(l[0]) && !l.TrimStart().StartsWith("#")) break;
+                    var t = l.Trim();
+                    if (t.Length == 0 || t.StartsWith("#")) continue;
+                    insertAt = j + 1;
+                    var k = t.Split(':')[0].Trim().Trim('"');
+                    if (k == key) { existing = j; break; }
+                }
+                if (existing >= 0) lines[existing] = entry;
+                else lines.Insert(insertAt, entry);
+            }
+            File.WriteAllText(path, string.Join("\n", lines) + "\n");
+        }
+        catch { }
     }
 
     private static AppConfig Parse(string yaml)
@@ -171,6 +217,7 @@ public sealed class AppConfig
 theme: dark               # dark | light | inherit (follow the OS)
 show_toolbar: false       # the icon toolbar is hidden by default
 show_titlebar: false      # hide the OS window title bar (min/max/close)
+user_name: ""             # name printed on signatures (blank = OS user)
 command_history_size: 200
 history_visible: 5        # history lines shown above the ":" line
 scroll_rows: 3

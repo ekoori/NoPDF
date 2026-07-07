@@ -194,6 +194,10 @@
                         Command="{Binding SelectToolCommand}" CommandParameter="{x:Static ed:EditorTool.Polyline}"
                         Classes.active="{Binding SelectedTab.CurrentTool, Converter={StaticResource EnumEq}, ConverterParameter={x:Static ed:EditorTool.Polyline}}">
                     <PathIcon Data="{StaticResource IconPolyline}"/></Button>
+                <Button Classes="tool" ToolTip.Tip="Signature"
+                        Command="{Binding SelectToolCommand}" CommandParameter="{x:Static ed:EditorTool.Signature}"
+                        Classes.active="{Binding SelectedTab.CurrentTool, Converter={StaticResource EnumEq}, ConverterParameter={x:Static ed:EditorTool.Signature}}">
+                    <PathIcon Data="{StaticResource IconSignature}"/></Button>
                 <Border Width="1" Background="{DynamicResource Separator}" Margin="5,2"/>
 
                 <Button Classes="tool" ToolTip.Tip="Zoom out"
@@ -367,6 +371,7 @@
                         </StackPanel>
                     </Border>
                     <ListBox x:Name="ThumbList" ItemsSource="{Binding SelectedTab.Thumbnails}"
+                             SelectionMode="Multiple"
                              SelectionChanged="OnThumbSelected" Background="Transparent">
                         <ListBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:PageThumbnail">
@@ -393,6 +398,11 @@
                                     DataContext="{Binding SelectedTab.AnnotationEditor}"
                                     x:DataType="vm:AnnotationEditorViewModel">
                             <TextBlock Text="{Binding TypeName}" FontWeight="SemiBold" FontSize="13"/>
+
+                            <StackPanel Spacing="4" IsVisible="{Binding HasSigner}">
+                                <TextBlock Classes="muted" Text="Signer name" FontSize="11"/>
+                                <TextBox Text="{Binding SignerName}" FontSize="12"/>
+                            </StackPanel>
 
                             <StackPanel Spacing="4" IsVisible="{Binding HasStroke}">
                                 <TextBlock Classes="muted" Text="Colour" FontSize="11"/>
@@ -458,7 +468,7 @@
                             </StackPanel>
 
                             <StackPanel Spacing="4" IsVisible="{Binding HasContents}">
-                                <TextBlock Classes="muted" Text="Note / text" FontSize="11"/>
+                                <TextBlock Classes="muted" Text="{Binding ContentsLabel}" FontSize="11"/>
                                 <TextBox Text="{Binding Contents}" AcceptsReturn="True"
                                          TextWrapping="Wrap" MinHeight="60" FontSize="12"/>
                             </StackPanel>

@@ -28,6 +28,8 @@ public sealed partial class AnnotationEditorViewModel : ViewModelBase
     public bool HasTextColor { get; }
     public bool HasOpacity { get; }
     public bool HasContents { get; }
+    public bool HasSigner { get; }
+    public string ContentsLabel { get; private set; } = "Note / text";
 
     [ObservableProperty] private string _strokeHex = "#000000";
     [ObservableProperty] private string _textHex = "#000000";
@@ -37,6 +39,7 @@ public sealed partial class AnnotationEditorViewModel : ViewModelBase
     [ObservableProperty] private double _fontSize = 14;
     [ObservableProperty] private double _opacity = 1;
     [ObservableProperty] private string _contents = "";
+    [ObservableProperty] private string _signerName = "";
 
     public IReadOnlyList<string> Palette { get; } = new[]
     {
@@ -58,6 +61,7 @@ public sealed partial class AnnotationEditorViewModel : ViewModelBase
             LineAnnotation { Arrow: true } => "Arrow",
             LineAnnotation => "Line",
             PolylineAnnotation => "Polyline",
+            SignatureAnnotation => "Signature",
             CalloutAnnotation => "Callout",
             FreeTextAnnotation => "Text box",
             StickyNoteAnnotation => "Sticky note",
@@ -77,6 +81,11 @@ public sealed partial class AnnotationEditorViewModel : ViewModelBase
                 FillEnabled = s.Interior is not null;
                 if (s.Interior is { } ic) FillHex = Hex(ic);
                 break;
+            case SignatureAnnotation sg:
+                HasStroke = HasSigner = HasContents = true;
+                ContentsLabel = "Note (optional)";
+                SignerName = sg.SignerName;
+                break;
             case FreeTextAnnotation f: // also CalloutAnnotation
                 HasStroke = HasWidth = HasFont = HasTextColor = HasOpacity = HasContents = true;
                 FontSize = f.FontSize; Opacity = f.BorderOpacity; TextHex = Hex(f.TextColor);
@@ -92,6 +101,9 @@ public sealed partial class AnnotationEditorViewModel : ViewModelBase
     [RelayCommand] private void PickStroke(string hex) => StrokeHex = hex;
     [RelayCommand] private void PickText(string hex) => TextHex = hex;
     [RelayCommand] private void PickFill(string hex) { FillEnabled = true; FillHex = hex; }
+
+    partial void OnSignerNameChanged(string value)
+        => Apply(() => { if (_ann is SignatureAnnotation s) s.SignerName = value; });
 
     partial void OnStrokeHexChanged(string value) => Apply(() => _ann.Color = Parse(value, _ann.Color));
     partial void OnStrokeWidthChanged(double value) => Apply(() => _ann.StrokeWidth = value);

@@ -46,6 +46,9 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public Action<double, double, double>? ViewStateSink { get; set; }
     public void ReportViewState(double zoom, double ox, double oy) => ViewStateSink?.Invoke(zoom, ox, oy);
 
+    /// <summary>Name printed on new signatures (from config).</summary>
+    public string SignerName { get; set; } = "";
+
     // Text-box annotation defaults (from config).
     public double TextboxFontSize { get; set; } = 14;
     public AnnotColor TextboxFrameColor { get; set; } = AnnotColor.Blue;
@@ -158,7 +161,10 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         double padding = 48;
         double zw = (viewportWidth - padding) / (page.PointWidth * DipsPerPoint);
         double z = widthOnly ? zw : Math.Min(zw, (viewportHeight - padding) / (page.PointHeight * DipsPerPoint));
+        int keep = CurrentPage;
         SetZoom(z);
+        // Keep the current page in view instead of jumping after the resize.
+        ScrollToPageRequested?.Invoke(Math.Clamp(keep - 1, 0, Math.Max(0, PageCount - 1)));
     }
 
     public void RequestFitWidth() => FitWidthRequested?.Invoke();
@@ -320,7 +326,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         Rebuild(nb, order);
     }
 
-    public void InsertFile(string path, int atIndex)
+    public int InsertFile(string path, int atIndex)
     {
         BeginChange();
         var other = File.ReadAllBytes(path);
@@ -332,6 +338,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         for (int j = 0; j < otherCount; j++) order.Add(-1);
         for (int i = atIndex; i < PageCount; i++) order.Add(i);
         Rebuild(nb, order);
+        return otherCount;
     }
 
     public void MergeFile(string path)
