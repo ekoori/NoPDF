@@ -67,7 +67,10 @@ public sealed class CommandRegistry
             ["toolbar"] = (_, _) => { _main.ToggleToolbarCommand.Execute(null); return Msg(_main.IsToolbarVisible ? "Toolbar shown" : "Toolbar hidden"); },
             ["config"] = (_, _) => Config(),
             ["bind"] = Bind,
-            ["signatures"] = (_, _) => Msg(ListSignatures()),
+            ["showtabs"] = (_, rest) => { _main.ShowTabs(rest); return Msg($"Tabs: {_main.Config.Tabs}"); },
+            ["signatures"] = (_, _) => { _main.ToggleSignaturePanelCommand.Execute(null); return Msg(null); },
+            ["siglist"] = (_, _) => Msg(ListSignatures()),
+            ["signcert"] = SignCert,
             ["props"] = (_, _) => { _main.ToggleAnnotationPanelCommand.Execute(null); return Msg(_main.IsAnnotationPanelOpen ? "Annotation panel shown" : "Annotation panel hidden"); },
             ["annot"] = (_, _) => { _main.ToggleAnnotationPanelCommand.Execute(null); return Msg(null); },
             ["rotate"] = Rotate,
@@ -78,6 +81,7 @@ public sealed class CommandRegistry
             ["undo"] = (_, _) => { _main.Undo(); return Msg(null); },
             ["redo"] = (_, _) => Task.FromResult(DoRedo()),
             ["reopen"] = (_, _) => { _main.ReopenClosedTab(); return Msg(null); },
+            ["reload"] = (_, _) => { Doc?.ReloadFromDisk(); return Msg(Doc is null ? "No document" : "Reloaded from disk"); },
             ["fit"] = (_, _) => Task.FromResult(Fit(false)),
             ["fitwidth"] = (_, _) => Task.FromResult(Fit(true)),
             ["copy"] = (_, _) => { _main.RequestCopy(); return Msg(null); },
@@ -449,6 +453,33 @@ public sealed class CommandRegistry
         if (!File.Exists(path)) return $"File missing: {path}";
         await _main.OpenPathAsync(path);
         return null;
+    }
+
+    private async Task<string?> SignCert(string[] args, string rest)
+    {
+        var doc = Doc;
+        if (doc is null) return "No document";
+        string pfx, pwd, reason;
+        if (args.Length >= 2 && File.Exists(args[0]))
+        { pfx = args[0]; pwd = args[1]; reason = string.Join(' ', args.Skip(2)); }
+        else
+        { pfx = _main.Config.CertPath; pwd = _main.Config.CertPassword; reason = rest; }
+
+        if (string.IsNullOrWhiteSpace(pfx) || !File.Exists(pfx))
+            return "Set cert_path in config, or: signcert <pfx> <password> [reason]";
+
+        string dir = Path.GetDirectoryName(doc.FilePath) ?? "";
+        string name = $"{Path.GetFileNameWithoutExtension(doc.FilePath)}_signed.pdf";
+        string? dest = await _main.PickSaveAs(dir, name);
+        if (dest is null) return "Cancelled";
+        try
+        {
+            var bytes = doc.ExportWithAnnotations();
+            var cert = NoPdf.Core.Signing.SignatureService.LoadCertificate(pfx, pwd);
+            await Task.Run(() => NoPdf.Core.Signing.SignatureService.Sign(bytes, dest, cert, reason, ""));
+            return $"Signed → {Path.GetFileName(dest)}";
+        }
+        catch (Exception ex) { return "Sign failed: " + ex.Message; }
     }
 
     private string? ListSignatures()

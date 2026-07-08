@@ -36,6 +36,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty] private EditorTool _currentTool = EditorTool.Hand;
     [ObservableProperty] private bool _isDirty;
+    [ObservableProperty] private bool _isActive; // is this the selected tab
 
     private double _zoom = 1.0;
     private PageViewModel? _activeSelectionPage;
@@ -46,8 +47,11 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public Action<double, double, double>? ViewStateSink { get; set; }
     public void ReportViewState(double zoom, double ox, double oy) => ViewStateSink?.Invoke(zoom, ox, oy);
 
-    /// <summary>Name printed on new signatures (from config).</summary>
+    /// <summary>Name printed on new signatures (from config or active preset).</summary>
     public string SignerName { get; set; } = "";
+    public AnnotColor SigColor { get; set; } = AnnotColor.Blue;
+    public double SigThickness { get; set; } = 1.5;
+    public double SigOpacity { get; set; } = 1.0;
 
     // Text-box annotation defaults (from config).
     public double TextboxFontSize { get; set; } = 14;
@@ -275,6 +279,9 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
     public IEnumerable<PdfAnnotationModel> AllAnnotations() => Pages.SelectMany(p => p.Annotations);
 
+    /// <summary>Current document bytes with all annotations baked in (for signing).</summary>
+    public byte[] ExportWithAnnotations() => AnnotationWriter.SaveToBytes(_workingBytes, AllAnnotations().ToList());
+
     public Task SaveAsync(string? destPath = null)
     {
         string dest = destPath ?? FilePath;
@@ -324,6 +331,59 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         order.Insert(to, from);
         var nb = PageOps.Compose(_workingBytes, order);
         Rebuild(nb, order);
+    }
+
+    /// <summary>Moves a set of pages up (dir&lt;0) or down (dir&gt;0) by one, together.</summary>
+    public void MovePages(IReadOnlyList<int> indices, int dir)
+    {
+        if (indices.Count == 0 || dir == 0) return;
+        var sel = new HashSet<int>(indices);
+        var order = Enumerable.Range(0, PageCount).ToList();
+        bool moved = false;
+        if (dir < 0)
+            for (int i = 1; i < order.Count; i++)
+            {
+                if (sel.Contains(order[i]) && !sel.Contains(order[i - 1]))
+                { (order[i - 1], order[i]) = (order[i], order[i - 1]); moved = true; }
+            }
+        else
+            for (int i = order.Count - 2; i >= 0; i--)
+            {
+                if (sel.Contains(order[i]) && !sel.Contains(order[i + 1]))
+                { (order[i + 1], order[i]) = (order[i], order[i + 1]); moved = true; }
+            }
+        if (!moved) return;
+        BeginChange();
+        Rebuild(PageOps.Compose(_workingBytes, order), order);
+    }
+
+    /// <summary>Re-reads the file from disk, discarding in-memory edits.</summary>
+    public void ReloadFromDisk()
+    {
+        if (!File.Exists(FilePath)) return;
+        var (cleaned, models) = AnnotationReader.LoadAndStrip(File.ReadAllBytes(FilePath));
+        var oldDoc = Document;
+        var newDoc = PdfDocument.OpenBytes(cleaned, FilePath);
+        _workingBytes = cleaned;
+        Document = newDoc;
+        _undo.Clear(); _redo.Clear();
+        SelectedAnnotation = null; _selectedAnnotationPage = null; AnnotationEditor = null;
+        _activeSelectionPage = null; _findMatches.Clear(); _findIndex = -1;
+
+        Pages.Clear(); Thumbnails.Clear(); Outline.Clear();
+        var byPage = models.GroupBy(a => a.PageIndex).ToDictionary(g => g.Key, g => g.ToList());
+        for (int i = 0; i < newDoc.PageCount; i++)
+        {
+            var pvm = new PageViewModel(this, i, newDoc.GetPageSize(i));
+            if (byPage.TryGetValue(i, out var list)) foreach (var a in list) pvm.Annotations.Add(a);
+            Pages.Add(pvm);
+            Thumbnails.Add(new PageThumbnail(this, i, newDoc.GetPageSize(i)));
+        }
+        foreach (var item in newDoc.GetOutline()) Outline.Add(BookmarkNode.FromOutline(item));
+        oldDoc?.Dispose();
+        IsDirty = false;
+        OnPropertyChanged(nameof(PageCount));
+        OnPropertyChanged(nameof(HasOutline));
     }
 
     public int InsertFile(string path, int atIndex)

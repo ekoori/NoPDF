@@ -82,9 +82,10 @@ public sealed partial class AnnotationEditorViewModel : ViewModelBase
                 if (s.Interior is { } ic) FillHex = Hex(ic);
                 break;
             case SignatureAnnotation sg:
-                HasStroke = HasSigner = HasContents = true;
+                HasStroke = HasWidth = HasOpacity = HasSigner = HasContents = true;
                 ContentsLabel = "Note (optional)";
                 SignerName = sg.SignerName;
+                Opacity = sg.BorderOpacity;
                 break;
             case FreeTextAnnotation f: // also CalloutAnnotation
                 HasStroke = HasWidth = HasFont = HasTextColor = HasOpacity = HasContents = true;

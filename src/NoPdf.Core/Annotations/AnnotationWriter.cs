@@ -265,15 +265,30 @@ public static class AnnotationWriter
         var fonts = new PdfDictionary(doc); fonts.Elements["/Helv"] = helv;
         var res = new PdfDictionary(doc);
         res.Elements["/XObject"] = xobj; res.Elements["/Font"] = fonts;
+        if (sig.BorderOpacity < 0.999)
+        {
+            var gs = new PdfDictionary(doc);
+            gs.Elements.SetName("/Type", "/ExtGState");
+            gs.Elements.SetReal("/CA", sig.BorderOpacity);
+            gs.Elements.SetReal("/ca", sig.BorderOpacity);
+            var eg = new PdfDictionary(doc); eg.Elements["/GSca"] = gs;
+            res.Elements["/ExtGState"] = eg;
+        }
         form.Elements["/Resources"] = res;
 
         var sb = new StringBuilder();
-        // watermark fills the box
-        sb.Append("q ").Append(F(rc.Width)).Append(" 0 0 ").Append(F(rc.Height)).Append(' ')
-          .Append(F(rc.Left)).Append(' ').Append(F(rc.Bottom)).Append(" cm /Sig Do Q\n");
-        // border
-        sb.Append("1 w\n").Append(Col(sig.Color, true));
-        sb.Append(Re(rc.Left + 0.5, rc.Bottom + 0.5, rc.Width - 1, rc.Height - 1)).Append("S\n");
+        // watermark, centred, aspect preserved (logo is square)
+        double sq = Math.Min(rc.Width, rc.Height);
+        double cx = rc.Left + (rc.Width - sq) / 2, cy = rc.Bottom + (rc.Height - sq) / 2;
+        sb.Append("q ").Append(F(sq)).Append(" 0 0 ").Append(F(sq)).Append(' ')
+          .Append(F(cx)).Append(' ').Append(F(cy)).Append(" cm /Sig Do Q\n");
+        // border (honours width + opacity)
+        double bw = Math.Max(0.5, sig.StrokeWidth), inset = bw / 2;
+        bool bAlpha = sig.BorderOpacity < 0.999;
+        if (bAlpha) sb.Append("q /GSca gs\n");
+        sb.Append(F(bw)).Append(" w\n").Append(Col(sig.Color, true));
+        sb.Append(Re(rc.Left + inset, rc.Bottom + inset, rc.Width - bw, rc.Height - bw)).Append("S\n");
+        if (bAlpha) sb.Append("Q\n");
         // text
         double pad = 6;
         double x = rc.Left + pad, top = rc.Top - pad;

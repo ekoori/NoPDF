@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.Input;
 using NoPdf.App.Commands;
 using NoPdf.App.Config;
 using NoPdf.App.Editing;
+using NoPdf.Core.Annotations;
 
 namespace NoPdf.App.ViewModels;
 
@@ -28,6 +29,135 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public bool HasDocument => SelectedTab is not null;
     public bool IsTitlebarHidden => !Config.ShowTitlebar;
+
+    // ----- Tab display (top rows / left panel / off) -----
+    [ObservableProperty] private bool _isTabsTop;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(ShowLeftTabs))] private bool _isTabsLeft;
+    [ObservableProperty] private double _tabsMaxHeight = 96;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(ShowLeftTabs))] private bool _leftTabsVisible;
+    private int _peekToken;
+
+    public bool ShowLeftTabs => IsTabsLeft && LeftTabsVisible;
+
+    // ----- Signature presets -----
+    [ObservableProperty] private bool _isSignaturePanelOpen;
+    [ObservableProperty] private SignaturePreset? _selectedSignaturePreset;
+    public ObservableCollection<SignaturePreset> SignaturePresets { get; } = new();
+    private readonly SignaturePresetStore _sigStore = new();
+
+    [RelayCommand] private void ToggleSignaturePanel() => IsSignaturePanelOpen = !IsSignaturePanelOpen;
+
+    [RelayCommand]
+    private void AddSignaturePreset()
+    {
+        var p = new SignaturePreset { Name = Config.SignerName };
+        HookPreset(p);
+        SignaturePresets.Add(p);
+        SelectedSignaturePreset = p;
+        SaveSignaturePresets();
+    }
+
+    [RelayCommand]
+    private void DeleteSignaturePreset()
+    {
+        if (SelectedSignaturePreset is null) return;
+        SignaturePresets.Remove(SelectedSignaturePreset);
+        SelectedSignaturePreset = SignaturePresets.Count > 0 ? SignaturePresets[0] : null;
+        SaveSignaturePresets();
+    }
+
+    partial void OnSelectedSignaturePresetChanged(SignaturePreset? value) => ApplyPresetToAllDocs();
+
+    private void LoadSignaturePresets()
+    {
+        foreach (var dto in _sigStore.Load())
+        {
+            var p = new SignaturePreset
+            {
+                Name = dto.Name, FrameColor = dto.FrameColor,
+                FrameThickness = dto.FrameThickness, FrameOpacity = dto.FrameOpacity,
+            };
+            HookPreset(p);
+            SignaturePresets.Add(p);
+        }
+        SelectedSignaturePreset = SignaturePresets.Count > 0 ? SignaturePresets[0] : null;
+    }
+
+    private void HookPreset(SignaturePreset p) => p.PropertyChanged += (_, _) =>
+    {
+        SaveSignaturePresets();
+        if (ReferenceEquals(p, SelectedSignaturePreset)) ApplyPresetToAllDocs();
+    };
+
+    private void SaveSignaturePresets() => _sigStore.Save(SignaturePresets.Select(p =>
+        new SignaturePresetStore.Dto
+        {
+            Name = p.Name, FrameColor = p.FrameColor,
+            FrameThickness = p.FrameThickness, FrameOpacity = p.FrameOpacity,
+        }));
+
+    private void ApplyPresetToAllDocs() { foreach (var t in Tabs) ApplyPresetToDoc(t); }
+
+    private void ApplyPresetToDoc(DocumentViewModel doc)
+    {
+        var p = SelectedSignaturePreset;
+        if (p is not null)
+        {
+            doc.SignerName = string.IsNullOrWhiteSpace(p.Name) ? Config.SignerName : p.Name;
+            doc.SigColor = ParseHex(p.FrameColor, AnnotColor.Blue);
+            doc.SigThickness = p.FrameThickness;
+            doc.SigOpacity = p.FrameOpacity;
+        }
+        else { doc.SignerName = Config.SignerName; doc.SigColor = AnnotColor.Blue; doc.SigThickness = 1.5; doc.SigOpacity = 1.0; }
+    }
+
+    private static AnnotColor ParseHex(string hex, AnnotColor fallback)
+    {
+        hex = (hex ?? "").Trim().TrimStart('#');
+        if (hex.Length == 6
+            && byte.TryParse(hex.AsSpan(0, 2), System.Globalization.NumberStyles.HexNumber, null, out var r)
+            && byte.TryParse(hex.AsSpan(2, 2), System.Globalization.NumberStyles.HexNumber, null, out var g)
+            && byte.TryParse(hex.AsSpan(4, 2), System.Globalization.NumberStyles.HexNumber, null, out var b))
+            return new AnnotColor(r, g, b);
+        return fallback;
+    }
+
+    /// <summary>Raised to minimise the window (title bar is hidden).</summary>
+    public event Action? MinimizeRequested;
+
+    [RelayCommand] private void Minimize() => MinimizeRequested?.Invoke();
+    [RelayCommand] private void Quit() => RequestQuit();
+    [RelayCommand] private void SelectTab(DocumentViewModel? doc) { if (doc is not null) SelectedTab = doc; }
+
+    private void ApplyTabsConfig()
+    {
+        var (pos, rows, peek) = Config.TabsParsed;
+        IsTabsTop = pos == "top";
+        IsTabsLeft = pos == "left";
+        TabsMaxHeight = Math.Max(1, rows) * 30;
+        LeftTabsVisible = pos == "left" && peek < 0;
+    }
+
+    public void ShowTabs(string arg)
+    {
+        Config.Tabs = string.IsNullOrWhiteSpace(arg) ? "top 3" : arg.Trim();
+        AppConfig.SetScalar("tabs", Config.Tabs);
+        ApplyTabsConfig();
+    }
+
+    private void PeekLeftTabs()
+    {
+        var (pos, _, peek) = Config.TabsParsed;
+        if (pos != "left") return;
+        if (peek < 0) { LeftTabsVisible = true; return; }
+        if (peek == 0) return;
+        LeftTabsVisible = true;
+        int tok = ++_peekToken;
+        Task.Delay(peek).ContinueWith(_ => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (tok == _peekToken) LeftTabsVisible = false;
+        }));
+    }
 
     /// <summary>Set by the view; opens the native file picker and returns chosen paths.</summary>
     public Func<Task<IReadOnlyList<string>>>? OpenFilePicker { get; set; }
@@ -85,6 +215,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Commands = new CommandRegistry(this, Quickmarks);
         CommandBar = new CommandBarViewModel(this, Config.CommandHistorySize, Config.HistoryVisible);
         IsToolbarVisible = Config.ShowToolbar;
+        ApplyTabsConfig();
+        LoadSignaturePresets();
         RefreshRecent();
         if (cfgError is not null) StatusText = cfgError;
 
@@ -118,7 +250,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public void RequestQuit() => QuitRequested?.Invoke();
 
-    partial void OnSelectedTabChanged(DocumentViewModel? value) => SaveSession();
+    partial void OnSelectedTabChanged(DocumentViewModel? oldValue, DocumentViewModel? newValue)
+    {
+        if (oldValue is not null) oldValue.IsActive = false;
+        if (newValue is not null) newValue.IsActive = true;
+        SaveSession();
+        PeekLeftTabs();
+    }
 
     private void SaveSession()
     {
@@ -192,7 +330,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             doc.TextboxFontSize = Config.TextboxFontSize;
             doc.TextboxFrameColor = Config.TextboxFrameColorValue;
             doc.TextboxFrameOpacity = Config.TextboxFrameOpacity;
-            doc.SignerName = Config.SignerName;
+            ApplyPresetToDoc(doc);
             var saved = ViewStates.Get(path);
             if (saved is not null) doc.InitialView = (saved.Zoom, saved.OffsetX, saved.OffsetY);
             doc.ViewStateSink = (z, x, y) => ViewStates.Set(path, z, x, y);
@@ -289,6 +427,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Config = cfg;
         KeyBindings = new KeyBindingService(cfg);
         IsToolbarVisible = cfg.ShowToolbar;
+        ApplyTabsConfig();
         OnPropertyChanged(nameof(IsTitlebarHidden));
         ConfigApplied?.Invoke(cfg);
         StatusText = err ?? "Config reloaded";

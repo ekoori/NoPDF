@@ -6,6 +6,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using NoPdf.App.Config;
 using NoPdf.App.ViewModels;
 
@@ -41,6 +42,7 @@ public partial class MainWindow : Window
             WindowDecorations = Avalonia.Controls.WindowDecorations.BorderOnly;
 
         vm.ConfigApplied += ApplyConfigLive;
+        vm.MinimizeRequested += () => WindowState = WindowState.Minimized;
 
         AddHandler(KeyDownEvent, OnGlobalKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
 
@@ -82,14 +84,20 @@ public partial class MainWindow : Window
             : Avalonia.Controls.WindowDecorations.BorderOnly;
     }
 
+    private static bool OverButton(object? source)
+        => (source as Control)?.FindAncestorOfType<Button>(includeSelf: true) is not null;
+
     private void OnDragStripPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && !OverButton(e.Source))
             BeginMoveDrag(e);
     }
 
     private void OnDragStripDoubleTapped(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-        => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    {
+        if (OverButton(e.Source)) return;
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    }
 
     private void OnOutlineSelected(object? sender, SelectionChangedEventArgs e)
         => NavigateToBookmark(e);
@@ -129,16 +137,10 @@ public partial class MainWindow : Window
         => Vm.SelectedTab?.RotatePages(SelectedThumbIndices(), 90);
 
     private void OnThumbMoveUp(object? sender, RoutedEventArgs e)
-    {
-        int i = SelectedThumbIndices()[0];
-        Vm.SelectedTab?.MovePage(i, i - 1);
-    }
+        => Vm.SelectedTab?.MovePages(SelectedThumbIndices(), -1);
 
     private void OnThumbMoveDown(object? sender, RoutedEventArgs e)
-    {
-        int i = SelectedThumbIndices()[^1];
-        Vm.SelectedTab?.MovePage(i, i + 1);
-    }
+        => Vm.SelectedTab?.MovePages(SelectedThumbIndices(), +1);
 
     private void OnThumbDelete(object? sender, RoutedEventArgs e)
         => Vm.SelectedTab?.DeletePages(SelectedThumbIndices());

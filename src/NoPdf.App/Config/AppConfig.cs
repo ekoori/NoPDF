@@ -23,11 +23,36 @@ public sealed class AppConfig
 
     /// <summary>Name used on signatures; falls back to the OS user name if blank.</summary>
     public string UserName { get; set; } = "";
+
+    /// <summary>PKCS#12 (.pfx) certificate + password for :signcert.</summary>
+    public string CertPath { get; set; } = "";
+    public string CertPassword { get; set; } = "";
     public string SignerName => string.IsNullOrWhiteSpace(UserName) ? Environment.UserName : UserName;
     public int CommandHistorySize { get; set; } = 200;
 
     /// <summary>Number of history lines shown above the command line.</summary>
     public int HistoryVisible { get; set; } = 5;
+
+    /// <summary>Tab display: "top &lt;rows&gt;" | "left &lt;ms&gt;" | "on" | "off".</summary>
+    public string Tabs { get; set; } = "top 3";
+
+    /// <summary>Parsed tab display: position (top/left/off), rows (top), peek ms (left; -1 = permanent).</summary>
+    public (string Pos, int Rows, int PeekMs) TabsParsed
+    {
+        get
+        {
+            var t = (Tabs ?? "").Trim().ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (t.Length == 0) return ("top", 3, 0);
+            return t[0] switch
+            {
+                "top" => ("top", t.Length > 1 && int.TryParse(t[1], out var r) ? Math.Clamp(r, 1, 12) : 3, 0),
+                "left" => ("left", 0, t.Length > 1 && int.TryParse(t[1], out var ms) ? ms : -1),
+                "on" => ("left", 0, -1),
+                "off" => ("off", 0, 0),
+                _ => ("top", 3, 0),
+            };
+        }
+    }
 
     /// <summary>Lines scrolled by scrollup/scrolldown (j/k, arrows).</summary>
     public int ScrollRows { get; set; } = 3;
@@ -116,6 +141,29 @@ public sealed class AppConfig
                 }
                 if (existing >= 0) lines[existing] = entry;
                 else lines.Insert(insertAt, entry);
+            }
+            File.WriteAllText(path, string.Join("\n", lines) + "\n");
+        }
+        catch { }
+    }
+
+    /// <summary>Sets a top-level scalar <c>key: value</c> in the config file, preserving comments.</summary>
+    public static void SetScalar(string key, string value)
+    {
+        try
+        {
+            var path = ConfigPath;
+            var lines = File.Exists(path) ? File.ReadAllLines(path).ToList() : new List<string>();
+            int idx = lines.FindIndex(l =>
+                l.TrimStart() == l && l.StartsWith(key + ":") && !l.StartsWith("#"));
+            // keep any trailing comment on the line
+            string entry = $"{key}: {value}";
+            if (idx < 0) lines.Add(entry);
+            else
+            {
+                int c = lines[idx].IndexOf('#');
+                if (c > 0) entry += "  " + lines[idx][c..];
+                lines[idx] = entry;
             }
             File.WriteAllText(path, string.Join("\n", lines) + "\n");
         }
@@ -218,8 +266,11 @@ theme: dark               # dark | light | inherit (follow the OS)
 show_toolbar: false       # the icon toolbar is hidden by default
 show_titlebar: false      # hide the OS window title bar (min/max/close)
 user_name: ""             # name printed on signatures (blank = OS user)
+cert_path: ""             # .pfx certificate for :signcert (cryptographic signing)
+cert_password: ""
 command_history_size: 200
 history_visible: 5        # history lines shown above the ":" line
+tabs: top 3               # top <rows> | left <ms> | on | off  (:showtabs)
 scroll_rows: 3
 
 # Text-box annotation defaults.

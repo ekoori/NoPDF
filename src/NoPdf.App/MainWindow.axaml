@@ -18,6 +18,22 @@
     <Window.Resources>
         <conv:EnumEqualsConverter x:Key="EnumEq"/>
         <conv:HexBrushConverter x:Key="HexBrush"/>
+        <!-- A tab as a chip (used both top and in the left panel) -->
+        <DataTemplate x:Key="TabChip" x:DataType="vm:DocumentViewModel">
+            <Button Classes="tabchip" Classes.active="{Binding IsActive}"
+                    Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).SelectTabCommand}"
+                    CommandParameter="{Binding}">
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                    <TextBlock Text="{Binding Title}" FontSize="12" VerticalAlignment="Center"
+                               MaxWidth="150" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="&#x25CF;" Foreground="#E08000" FontSize="9" VerticalAlignment="Center"
+                               IsVisible="{Binding IsDirty}"/>
+                    <Button Classes="tabclose" Content="&#x2715;"
+                            Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CloseTabCommand}"
+                            CommandParameter="{Binding}"/>
+                </StackPanel>
+            </Button>
+        </DataTemplate>
     </Window.Resources>
 
     <Window.Styles>
@@ -96,6 +112,40 @@
             <Setter Property="Padding" Value="8,3"/>
             <Setter Property="FontSize" Value="12"/>
         </Style>
+        <!-- Tab chips -->
+        <Style Selector="Button.tabchip">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource ChromeForeground}"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="Margin" Value="0,0,3,3"/>
+            <Setter Property="MinHeight" Value="24"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        </Style>
+        <Style Selector="Button.tabchip:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource ChromeHover}"/>
+        </Style>
+        <Style Selector="Button.tabchip.active /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AccentActive}"/>
+        </Style>
+        <!-- Window buttons (minimise/close) -->
+        <Style Selector="Button.wbtn">
+            <Setter Property="Width" Value="42"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource ChromeForeground}"/>
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="CornerRadius" Value="0"/>
+        </Style>
+        <Style Selector="Button.wbtn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource ChromeHover}"/>
+        </Style>
+        <Style Selector="Button.wclose:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#E81123"/>
+            <Setter Property="TextElement.Foreground" Value="White"/>
+        </Style>
         <!-- Dark side panels -->
         <Style Selector="Border.sidepanel TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource ChromeForeground}"/>
@@ -113,10 +163,22 @@
 
     <DockPanel LastChildFill="True">
 
-        <!-- ===== Drag strip (shown when the OS title bar is hidden) ===== -->
-        <Border DockPanel.Dock="Top" Height="6" Background="{DynamicResource ChromeBackground}"
-                x:Name="DragStrip" IsVisible="{Binding IsTitlebarHidden}"
-                PointerPressed="OnDragStripPressed" DoubleTapped="OnDragStripDoubleTapped"/>
+        <!-- ===== Top bar: tabs (top mode) + window buttons; drag region ===== -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Background="{DynamicResource ChromeBackground}"
+              x:Name="DragStrip" PointerPressed="OnDragStripPressed" DoubleTapped="OnDragStripDoubleTapped">
+            <ScrollViewer Grid.Column="0" MaxHeight="{Binding TabsMaxHeight}"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          IsVisible="{Binding IsTabsTop}" Padding="4,3">
+                <ItemsControl ItemsSource="{Binding Tabs}" ItemTemplate="{StaticResource TabChip}">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </ScrollViewer>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"
+                        IsVisible="{Binding IsTitlebarHidden}">
+                <Button Classes="wbtn" ToolTip.Tip="Minimise" Command="{Binding MinimizeCommand}" Content="&#x2013;"/>
+                <Button Classes="wbtn wclose" ToolTip.Tip="Close" Command="{Binding QuitCommand}" Content="&#x2715;"/>
+            </StackPanel>
+        </Grid>
 
         <!-- ===== Toolbar ===== -->
         <Border DockPanel.Dock="Top" Background="{DynamicResource ChromeBackground}" BorderBrush="{DynamicResource ChromeBorder}"
@@ -247,10 +309,23 @@
         </Border>
 
         <!-- ===== Main area ===== -->
-        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
+
+            <!-- Left tabs panel -->
+            <Border Grid.Column="0" Classes="sidepanel" Width="190" Background="{DynamicResource ChromeBackground}"
+                    BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,1,0"
+                    IsVisible="{Binding ShowLeftTabs}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Classes="muted" Text="TABS" FontSize="11" FontWeight="SemiBold"
+                               Margin="12,10,12,6"/>
+                    <ScrollViewer>
+                        <ItemsControl ItemsSource="{Binding Tabs}" ItemTemplate="{StaticResource TabChip}" Margin="4"/>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
 
             <!-- Bookmarks / outline panel -->
-            <Border Grid.Column="0" Classes="sidepanel" Width="260" Background="{DynamicResource ChromeBackground}"
+            <Border Grid.Column="1" Classes="sidepanel" Width="260" Background="{DynamicResource ChromeBackground}"
                     BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,1,0"
                     IsVisible="{Binding IsBookmarksPanelOpen}">
                 <DockPanel Margin="0">
@@ -298,7 +373,7 @@
                 </DockPanel>
             </Border>
 
-            <Panel Grid.Column="1">
+            <Panel Grid.Column="2">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12"
                         IsVisible="{Binding !HasDocument}">
                 <PathIcon Data="{StaticResource IconOpen}" Width="56" Height="56" Opacity="0.35"/>
@@ -324,31 +399,17 @@
                 </Border>
             </StackPanel>
 
-            <TabControl ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}"
-                        IsVisible="{Binding HasDocument}" Padding="0">
-                <TabControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:DocumentViewModel">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="{Binding Title}" VerticalAlignment="Center" FontSize="12"/>
-                            <TextBlock Text="●" Foreground="#E08000" FontSize="10"
-                                       VerticalAlignment="Center" IsVisible="{Binding IsDirty}"
-                                       ToolTip.Tip="Unsaved annotations"/>
-                            <Button Classes="tabclose" Content="✕"
-                                    Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CloseTabCommand}"
-                                    CommandParameter="{Binding}"/>
-                        </StackPanel>
-                    </DataTemplate>
-                </TabControl.ItemTemplate>
-                <TabControl.ContentTemplate>
+            <ContentControl Content="{Binding SelectedTab}" IsVisible="{Binding HasDocument}">
+                <ContentControl.ContentTemplate>
                     <DataTemplate x:DataType="vm:DocumentViewModel">
                         <views:DocumentView/>
                     </DataTemplate>
-                </TabControl.ContentTemplate>
-            </TabControl>
+                </ContentControl.ContentTemplate>
+            </ContentControl>
             </Panel>
 
             <!-- Thumbnails / pages panel -->
-            <Border Grid.Column="2" Classes="sidepanel" Width="196" Background="{DynamicResource ChromeBackground}"
+            <Border Grid.Column="3" Classes="sidepanel" Width="196" Background="{DynamicResource ChromeBackground}"
                     BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="1,0,0,0"
                     IsVisible="{Binding IsThumbnailsPanelOpen}">
                 <DockPanel>
@@ -383,7 +444,7 @@
             </Border>
 
             <!-- Annotation properties panel -->
-            <Border Grid.Column="3" Classes="sidepanel" Width="248"
+            <Border Grid.Column="4" Classes="sidepanel" Width="248"
                     Background="{DynamicResource PanelBackground}"
                     BorderBrush="{DynamicResource PanelBorder}" BorderThickness="1,0,0,0"
                     IsVisible="{Binding IsAnnotationPanelOpen}">
@@ -472,6 +533,53 @@
                                 <TextBox Text="{Binding Contents}" AcceptsReturn="True"
                                          TextWrapping="Wrap" MinHeight="60" FontSize="12"/>
                             </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <!-- Signature presets panel -->
+            <Border Grid.Column="5" Classes="sidepanel" Width="248"
+                    Background="{DynamicResource PanelBackground}"
+                    BorderBrush="{DynamicResource PanelBorder}" BorderThickness="1,0,0,0"
+                    IsVisible="{Binding IsSignaturePanelOpen}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Classes="muted" Text="SIGNATURES"
+                               FontSize="11" FontWeight="SemiBold" Margin="12,10,12,6"/>
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="12,0,12,6">
+                        <Button Content="+ New" FontSize="12" Command="{Binding AddSignaturePresetCommand}"/>
+                        <Button Content="Delete" FontSize="12" Command="{Binding DeleteSignaturePresetCommand}"/>
+                    </StackPanel>
+                    <ListBox DockPanel.Dock="Top" ItemsSource="{Binding SignaturePresets}"
+                             SelectedItem="{Binding SelectedSignaturePreset}" Background="Transparent"
+                             MaxHeight="150" Margin="8,0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SignaturePreset">
+                                <TextBlock Text="{Binding Name}" FontSize="12"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <ScrollViewer IsVisible="{Binding SelectedSignaturePreset, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <StackPanel Margin="12,8,12,12" Spacing="12"
+                                    DataContext="{Binding SelectedSignaturePreset}" x:DataType="vm:SignaturePreset">
+                            <StackPanel Spacing="4">
+                                <TextBlock Classes="muted" Text="Name" FontSize="11"/>
+                                <TextBox Text="{Binding Name}" FontSize="12"/>
+                            </StackPanel>
+                            <StackPanel Spacing="4">
+                                <TextBlock Classes="muted" Text="Frame colour" FontSize="11"/>
+                                <TextBox Text="{Binding FrameColor}" FontSize="12"/>
+                            </StackPanel>
+                            <StackPanel Spacing="2">
+                                <TextBlock Classes="muted" Text="Frame thickness" FontSize="11"/>
+                                <Slider Minimum="0.5" Maximum="8" Value="{Binding FrameThickness}"/>
+                            </StackPanel>
+                            <StackPanel Spacing="2">
+                                <TextBlock Classes="muted" Text="Frame opacity" FontSize="11"/>
+                                <Slider Minimum="0" Maximum="1" Value="{Binding FrameOpacity}"/>
+                            </StackPanel>
+                            <TextBlock Classes="muted" TextWrapping="Wrap" FontSize="11"
+                                       Text="Select the Signature tool and drag on a page to place a signature with this style."/>
                         </StackPanel>
                     </ScrollViewer>
                 </DockPanel>

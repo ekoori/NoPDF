@@ -162,7 +162,21 @@ public partial class DocumentView : UserControl
     private void OnScrollToPage(int index)
     {
         if (_vm is null || index < 0 || index >= _vm.Pages.Count) return;
-        Dispatcher.UIThread.Post(() => PageList.ScrollIntoView(_vm.Pages[index]));
+        Dispatcher.UIThread.Post(() =>
+        {
+            PageList.ScrollIntoView(_vm.Pages[index]);
+            // Align the page's TOP with the viewport top (ScrollIntoView alone can
+            // leave the page at the bottom when scrolling upward).
+            Dispatcher.UIThread.Post(() =>
+            {
+                var sv = Scroll;
+                var c = PageList.ContainerFromIndex(index);
+                if (sv is null || c is null) return;
+                var pt = c.TranslatePoint(new Point(0, 0), sv);
+                if (pt is { } p)
+                    sv.Offset = new Vector(sv.Offset.X, Math.Max(0, sv.Offset.Y + p.Y - 24));
+            }, DispatcherPriority.Background);
+        });
     }
 
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)

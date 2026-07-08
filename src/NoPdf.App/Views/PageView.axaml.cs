@@ -133,7 +133,9 @@ public partial class PageView : UserControl
                     Rect = new TextRect(page.X, page.Y, page.X, page.Y),
                     SignerName = string.IsNullOrWhiteSpace(_current.Owner.SignerName) ? "Signature" : _current.Owner.SignerName,
                     Signed = System.DateTime.Now,
-                    Color = _current.Owner.TextboxFrameColor,
+                    Color = _current.Owner.SigColor,
+                    StrokeWidth = _current.Owner.SigThickness,
+                    BorderOpacity = _current.Owner.SigOpacity,
                 }, page, e);
                 break;
             case EditorTool.Note:

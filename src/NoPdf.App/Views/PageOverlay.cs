@@ -170,8 +170,15 @@ public sealed class PageOverlay : Control
         ctx.FillRectangle(Brushes.White, rect);
         var logo = SigLogo();
         if (logo is not null)
-            ctx.DrawImage(logo, new Rect(logo.Size), rect);
-        ctx.DrawRectangle(null, pen, rect);
+        {
+            // Contain the (square) watermark, keeping its aspect ratio.
+            var ls = logo.Size;
+            double sc = Math.Min(rect.Width / ls.Width, rect.Height / ls.Height);
+            double w = ls.Width * sc, h = ls.Height * sc;
+            var dest = new Rect(rect.X + (rect.Width - w) / 2, rect.Y + (rect.Height - h) / 2, w, h);
+            ctx.DrawImage(logo, new Rect(ls), dest);
+        }
+        ctx.DrawRectangle(null, FramePen(sig, color), rect);
 
         double s = _scale;
         void Line(string text, double fontSize, Color c, double y)
