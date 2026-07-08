@@ -61,11 +61,17 @@ To cut a release, run the script from the repo root (PowerShell):
 ./scripts/release.ps1                    # build all four platforms at the current version
 ./scripts/release.ps1 -Version 0.0.2-beta.01   # bump the version, then build
 ./scripts/release.ps1 -Tag -Push         # also create & push the git tag v<version>
+./scripts/release.ps1 -Publish           # tag, push, and create a GitHub Release with
+                                         #   the four binaries attached (needs gh)
 ```
 
 It publishes self-contained single-file binaries for `win-x64`, `linux-x64`,
 `osx-x64`, and `osx-arm64` into `Release/` (gitignored), named
 `noPDF-v<version>-<rid>`.
+
+`-Publish` uploads those binaries to a GitHub Release for the tag (prerelease when
+the version has a `-suffix`). It requires the [GitHub CLI](https://cli.github.com)
+authenticated once with `gh auth login`.
 
 ## Using the command line
 

@@ -11,12 +11,15 @@
   .\scripts\release.ps1                       # build artifacts for the current version
   .\scripts\release.ps1 -Version 0.0.2-beta.01  # bump version, then build
   .\scripts\release.ps1 -Tag -Push            # also create & push the git tag
+  .\scripts\release.ps1 -Publish              # tag, push, and create a GitHub Release
+                                              #   with the four binaries attached (needs gh)
 #>
 [CmdletBinding()]
 param(
     [string]$Version,     # e.g. 0.0.2-beta.01 (omit "v"); if set, updates Directory.Build.props
     [switch]$Tag,         # create an annotated git tag v<version>
-    [switch]$Push         # push the tag to origin (implies -Tag)
+    [switch]$Push,        # push the tag to origin (implies -Tag)
+    [switch]$Publish      # create a GitHub Release for the tag & upload the binaries (implies -Tag -Push; needs authenticated gh)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -72,12 +75,50 @@ foreach ($t in $targets) {
 
 Write-Host "`nArtifacts written to $outDir" -ForegroundColor Cyan
 
+# -Publish implies tag + push (a GitHub Release needs the tag on the remote).
+if ($Publish) { $Tag = $true; $Push = $true }
+
 if ($Tag -or $Push) {
     Push-Location $root
     try {
         git tag -a $verTag -m "noPDF $verTag" 2>$null
         if ($LASTEXITCODE -eq 0) { Write-Host "Created tag $verTag" } else { Write-Host "Tag $verTag already exists" }
         if ($Push) { git push origin $verTag; Write-Host "Pushed tag $verTag" }
+    }
+    finally { Pop-Location }
+}
+
+if ($Publish) {
+    # Locate gh (may not be on PATH right after install).
+    $gh = (Get-Command gh -ErrorAction SilentlyContinue).Source
+    if (-not $gh) {
+        $fallback = Join-Path $env:ProgramFiles 'GitHub CLI\gh.exe'
+        if (Test-Path $fallback) { $gh = $fallback }
+    }
+    if (-not $gh) { throw "gh (GitHub CLI) not found. Install it and run 'gh auth login'." }
+
+    & $gh auth status *> $null
+    if ($LASTEXITCODE -ne 0) { throw "gh is not authenticated. Run 'gh auth login' once, then re-run with -Publish." }
+
+    $assets = Get-ChildItem $outDir -File | Where-Object { $_.Name -like "noPDF-$verTag-*" } | Select-Object -Expand FullName
+    if (-not $assets) { throw "No artifacts found for $verTag in $outDir." }
+
+    # Mark as prerelease when the version has a prerelease suffix (e.g. -beta.01).
+    $preArgs = @(); if ($ver -match '-') { $preArgs = @('--prerelease') }
+
+    Push-Location $root
+    try {
+        & $gh release view $verTag *> $null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $verTag exists - uploading assets (clobber)..."
+            & $gh release upload $verTag @assets --clobber
+        }
+        else {
+            Write-Host "Creating GitHub Release $verTag..."
+            & $gh release create $verTag @assets --title "noPDF $verTag" --notes "noPDF $verTag" @preArgs
+        }
+        if ($LASTEXITCODE -ne 0) { throw "gh release failed for $verTag" }
+        Write-Host "Published GitHub Release $verTag with $($assets.Count) asset(s)" -ForegroundColor Green
     }
     finally { Pop-Location }
 }
