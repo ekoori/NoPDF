@@ -1,0 +1,11 @@
+<Project>
+  <!-- Single source of truth for the app version.
+       InformationalVersion is the full display/tag value (git tag = "v" + it).
+       VersionPrefix is the numeric X.Y.Z the OS reads as File/Product version.
+       Bump both together, or use  scripts/release.ps1 -Version 0.0.2-beta.01 . -->
+  <PropertyGroup>
+    <InformationalVersion>0.0.1-beta.01</InformationalVersion>
+    <VersionPrefix>0.0.1</VersionPrefix>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+</Project>

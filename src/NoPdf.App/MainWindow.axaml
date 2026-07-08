@@ -6,6 +6,7 @@
         xmlns:ed="using:NoPdf.App.Editing"
         xmlns:views="using:NoPdf.App.Views"
         xmlns:conv="using:NoPdf.App.Converters"
+        xmlns:app="using:NoPdf.App"
         xmlns:sys="using:System"
         mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="720"
         x:Class="NoPdf.App.MainWindow"
@@ -383,6 +384,9 @@
                         Command="{Binding OpenCommand}"/>
                 <TextBlock Text="Tip: press : for the command line, / to find"
                            FontSize="12" HorizontalAlignment="Center" Foreground="{DynamicResource MutedForeground}"/>
+                <TextBlock Text="{x:Static app:AppVersion.Display}"
+                           FontSize="11" HorizontalAlignment="Center" Opacity="0.6"
+                           Foreground="{DynamicResource MutedForeground}"/>
                 <Border Width="360" Margin="0,8,0,0" IsVisible="{Binding HasRecent}">
                     <StackPanel Spacing="2">
                         <TextBlock Text="Recent" FontSize="11" FontWeight="SemiBold"

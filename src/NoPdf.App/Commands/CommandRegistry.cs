@@ -101,6 +101,7 @@ public sealed class CommandRegistry
             ["delannot"] = (_, _) => { Doc?.DeleteSelectedAnnotation(); return Msg(null); },
             ["marks"] = (_, _) => Task.FromResult(OpenMarks()),
             ["help"] = (_, _) => Task.FromResult<string?>("Commands: " + string.Join(", ", CommandNames())),
+            ["version"] = (_, _) => Task.FromResult<string?>(NoPdf.App.AppVersion.Display),
         };
         // Register tool commands.
         foreach (var kv in Tools)
