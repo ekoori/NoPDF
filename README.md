@@ -47,6 +47,26 @@ dotnet publish src/NoPdf.App -c Release -r win-x64 --self-contained \
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 ```
 
+## Releases & versioning
+
+The version lives in a single place — `Directory.Build.props`:
+`InformationalVersion` (e.g. `0.0.1-beta.01`) is the full label used by the app
+and the git tag; `VersionPrefix` (e.g. `0.0.1`) is the numeric File/Product
+version the OS reads. The `:version` command and the start page show it as
+`noPDF v<version>`.
+
+To cut a release, run the script from the repo root (PowerShell):
+
+```powershell
+./scripts/release.ps1                    # build all four platforms at the current version
+./scripts/release.ps1 -Version 0.0.2-beta.01   # bump the version, then build
+./scripts/release.ps1 -Tag -Push         # also create & push the git tag v<version>
+```
+
+It publishes self-contained single-file binaries for `win-x64`, `linux-x64`,
+`osx-x64`, and `osx-arm64` into `Release/` (gitignored), named
+`noPDF-v<version>-<rid>`.
+
 ## Using the command line
 
 - **`:`** opens the command line; **`/`** opens search; **`Esc`** closes.
