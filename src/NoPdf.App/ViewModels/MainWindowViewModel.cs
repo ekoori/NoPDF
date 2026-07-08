@@ -111,8 +111,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// </summary>
     public async void CertifySignature(DocumentViewModel doc, SignatureAnnotation sig)
     {
-        if (sig.Certified) return;
-        sig.Certified = true; // one-shot
+        if (sig.Certified) return;                 // already signed — don't re-prompt
         string? pfx = sig.CertPath;
         if (string.IsNullOrWhiteSpace(pfx) || !File.Exists(pfx))
         { StatusText = "Certificate not found: " + pfx; return; }
@@ -120,13 +119,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         string dir = Path.GetDirectoryName(doc.FilePath) ?? "";
         string name = $"{Path.GetFileNameWithoutExtension(doc.FilePath)}_signed.pdf";
         string? dest = await PickSaveAs(dir, name);
-        if (dest is null) { StatusText = "Signing cancelled"; return; }
+        if (dest is null) { StatusText = "Signing cancelled"; return; } // leave un-certified so it can be retried
         try
         {
             var bytes = doc.ExportWithAnnotations();
             var cert = NoPdf.Core.Signing.SignatureService.LoadCertificate(pfx, sig.CertPassword ?? "");
             string reason = sig.Contents ?? "";
             await Task.Run(() => NoPdf.Core.Signing.SignatureService.Sign(bytes, dest, cert, reason, ""));
+            sig.Certified = true;                  // succeeded — don't fire again
             StatusText = $"Signed & certified → {Path.GetFileName(dest)}";
         }
         catch (Exception ex) { StatusText = "Sign failed: " + ex.Message; }
