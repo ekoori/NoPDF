@@ -136,6 +136,9 @@ public partial class PageView : UserControl
                     Color = _current.Owner.SigColor,
                     StrokeWidth = _current.Owner.SigThickness,
                     BorderOpacity = _current.Owner.SigOpacity,
+                    Certify = _current.Owner.SigUseCertificate,
+                    CertPath = _current.Owner.SigCertPath,
+                    CertPassword = _current.Owner.SigCertPassword,
                 }, page, e);
                 break;
             case EditorTool.Note:
@@ -290,8 +293,9 @@ public partial class PageView : UserControl
         Owner!.SelectAnnotation(_current, ann);
         // Switch to Select so the new annotation can be moved/resized immediately.
         Owner.SelectTool(EditorTool.Select);
-        // Signatures get their note from the properties panel, not an inline editor.
-        if (ann is FreeTextAnnotation ft and not SignatureAnnotation) OpenEditor(ft, isNew: true);
+        // Free text (incl. signatures) is edited in place — a signature's text is the
+        // signing reason, which certification will pick up when the edit is committed.
+        if (ann is FreeTextAnnotation ft) OpenEditor(ft, isNew: true);
     }
 
     private void CreateNote(PdfPoint page, PointerPressedEventArgs e)
@@ -422,13 +426,17 @@ public partial class PageView : UserControl
             Owner?.BeginChange();
         ann.Contents = text;
 
-        // Remove empty free-text/callout boxes (nothing to show).
-        if (string.IsNullOrWhiteSpace(text) && ann is FreeTextAnnotation)
+        // Remove empty free-text/callout boxes (nothing to show) — but keep signatures,
+        // whose reason may legitimately be blank.
+        if (string.IsNullOrWhiteSpace(text) && ann is FreeTextAnnotation and not SignatureAnnotation)
             _current?.RemoveAnnotation(ann);
         else
         {
             Owner?.MarkDirty();
             _current?.NotifyAnnotationChanged();
+            // A certified stamp triggers the cryptographic signing flow on commit.
+            if (ann is SignatureAnnotation { Certify: true, Certified: false } sig)
+                _current?.Owner.CertifyRequested?.Invoke(sig);
         }
         Focus();
     }

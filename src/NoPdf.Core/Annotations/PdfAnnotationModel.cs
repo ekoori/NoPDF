@@ -183,9 +183,20 @@ public sealed class SignatureAnnotation : FreeTextAnnotation
     public string SignerName { get; set; } = "";
     public System.DateTime Signed { get; set; } = System.DateTime.Now;
 
+    /// <summary>When true, committing this stamp triggers a cryptographic signature.</summary>
+    public bool Certify { get; set; }
+    public string? CertPath { get; set; }
+    public string? CertPassword { get; set; }
+    /// <summary>Set once the certify save flow has run, so it does not fire again.</summary>
+    public bool Certified { get; set; }
+
     public override PdfAnnotationModel Clone()
     {
-        var c = new SignatureAnnotation { SignerName = SignerName, Signed = Signed };
+        var c = new SignatureAnnotation
+        {
+            SignerName = SignerName, Signed = Signed,
+            Certify = Certify, CertPath = CertPath, CertPassword = CertPassword, Certified = Certified,
+        };
         CopyFreeTextTo(c);
         return c;
     }

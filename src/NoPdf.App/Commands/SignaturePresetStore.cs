@@ -11,9 +11,13 @@ public sealed class SignaturePresetStore
     public sealed class Dto
     {
         public string Name { get; set; } = "Signature";
+        public string Alias { get; set; } = "";
         public string FrameColor { get; set; } = "#1E6EDC";
         public double FrameThickness { get; set; } = 1.5;
         public double FrameOpacity { get; set; } = 1.0;
+        public bool UseCertificate { get; set; }
+        public string CertPath { get; set; } = "";
+        public string CertPassword { get; set; } = "";
     }
 
     private readonly string _path;

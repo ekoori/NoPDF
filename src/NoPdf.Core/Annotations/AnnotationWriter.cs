@@ -153,6 +153,8 @@ public static class AnnotationWriter
         var annot = NewAnnot(doc, page, "/FreeText", rc.Left, rc.Bottom, rc.Right, rc.Top, f);
         annot.Elements.SetString("/DA", $"/Helv {F(f.FontSize)} Tf {Col3(f.TextColor)} rg");
         annot.Elements.SetInteger("/Q", 0);
+        // Record the border width so the frame state survives a reload/strip round-trip.
+        annot.Elements["/BS"] = BorderStyle(doc, f.Border ? Math.Max(1, f.StrokeWidth) : 0);
         annot.Elements["/AP"] = Appearance(doc, rc.Left, rc.Bottom, rc.Right, rc.Top,
             FreeTextContent(f), withFont: true, strokeAlpha: f.BorderOpacity);
     }
@@ -170,6 +172,7 @@ public static class AnnotationWriter
         var annot = NewAnnot(doc, page, "/FreeText", l, b, r, t, c);
         annot.Elements.SetName("/IT", "/FreeTextCallout");
         annot.Elements.SetString("/DA", $"/Helv {F(c.FontSize)} Tf {Col3(c.TextColor)} rg");
+        annot.Elements["/BS"] = BorderStyle(doc, c.Border ? Math.Max(1, c.StrokeWidth) : 0);
         var le = new PdfArray(doc); le.Elements.Add(new PdfName("/OpenArrow")); le.Elements.Add(new PdfName("/None"));
         annot.Elements["/LE"] = le;
 
@@ -233,13 +236,37 @@ public static class AnnotationWriter
         return _logoJpeg = ms.ToArray();
     }
 
+    private static byte[]? _logoMask;
+
+    /// <summary>Raw 8-bit alpha (LogoPx²), 0 = transparent (white bg) .. 255 = opaque.</summary>
+    private static byte[] LogoMask()
+    {
+        if (_logoMask is not null) return _logoMask;
+        using var s = typeof(AnnotationWriter).Assembly
+            .GetManifestResourceStream("NoPdf.Core.Assets.sig_logo_mask.bin");
+        using var ms = new System.IO.MemoryStream();
+        s!.CopyTo(ms);
+        return _logoMask = ms.ToArray();
+    }
+
+    /// <summary>zlib-wrapped deflate, as expected by PDF <c>/FlateDecode</c>.</summary>
+    private static byte[] Flate(byte[] raw)
+    {
+        using var ms = new System.IO.MemoryStream();
+        using (var z = new System.IO.Compression.ZLibStream(
+            ms, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true))
+            z.Write(raw, 0, raw.Length);
+        return ms.ToArray();
+    }
+
     private static void AddSignature(PdfDocument doc, PdfPage page, SignatureAnnotation sig)
     {
         var rc = sig.Rect;
         var annot = NewAnnot(doc, page, "/Stamp", rc.Left, rc.Bottom, rc.Right, rc.Top, sig);
         annot.Elements.SetName("/Name", "/#23noPDF"); // custom stamp name
 
-        // Faint watermark image XObject (JPEG / DCTDecode).
+        // Faint watermark image XObject (JPEG / DCTDecode) with a soft mask so the
+        // white background is transparent and the page shows through.
         var logo = new PdfDictionary(doc);
         doc.Internals.AddObject(logo);
         logo.Elements.SetName("/Type", "/XObject");
@@ -250,6 +277,18 @@ public static class AnnotationWriter
         logo.Elements.SetInteger("/BitsPerComponent", 8);
         logo.Elements.SetName("/Filter", "/DCTDecode");
         logo.CreateStream(LogoJpeg());
+
+        var mask = new PdfDictionary(doc);
+        doc.Internals.AddObject(mask);
+        mask.Elements.SetName("/Type", "/XObject");
+        mask.Elements.SetName("/Subtype", "/Image");
+        mask.Elements.SetInteger("/Width", LogoPx);
+        mask.Elements.SetInteger("/Height", LogoPx);
+        mask.Elements.SetName("/ColorSpace", "/DeviceGray");
+        mask.Elements.SetInteger("/BitsPerComponent", 8);
+        mask.Elements.SetName("/Filter", "/FlateDecode");
+        mask.CreateStream(Flate(LogoMask()));
+        logo.Elements["/SMask"] = mask.Reference!;
 
         // Appearance form with the image + Helvetica font in resources.
         var form = new PdfDictionary(doc);
@@ -277,9 +316,9 @@ public static class AnnotationWriter
         form.Elements["/Resources"] = res;
 
         var sb = new StringBuilder();
-        // watermark, centred, aspect preserved (logo is square)
+        // watermark, left-aligned, aspect preserved (logo is square)
         double sq = Math.Min(rc.Width, rc.Height);
-        double cx = rc.Left + (rc.Width - sq) / 2, cy = rc.Bottom + (rc.Height - sq) / 2;
+        double cx = rc.Left, cy = rc.Bottom + (rc.Height - sq) / 2;
         sb.Append("q ").Append(F(sq)).Append(" 0 0 ").Append(F(sq)).Append(' ')
           .Append(F(cx)).Append(' ').Append(F(cy)).Append(" cm /Sig Do Q\n");
         // border (honours width + opacity)

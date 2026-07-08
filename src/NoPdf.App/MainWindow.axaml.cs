@@ -24,6 +24,7 @@ public partial class MainWindow : Window
         {
             OpenFilePicker = PickPdfFilesAsync,
             OpenSingleFilePicker = PickSinglePdfAsync,
+            OpenCertFilePicker = PickCertAsync,
             SaveAsPicker = PickSaveAsAsync,
             CopyHandler = CopySelectionAsync,
             CopyTextHandler = CopyTextAsync,
@@ -341,6 +342,21 @@ public partial class MainWindow : Window
             Title = "Select PDF",
             AllowMultiple = false,
             FileTypeFilter = new[] { new FilePickerFileType("PDF documents") { Patterns = new[] { "*.pdf" } } },
+        });
+        return files.Select(f => f.TryGetLocalPath()).FirstOrDefault(p => !string.IsNullOrEmpty(p));
+    }
+
+    private async Task<string?> PickCertAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Select certificate (.pfx / .p12)",
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("PKCS#12 certificate") { Patterns = new[] { "*.pfx", "*.p12" } },
+                FilePickerFileTypes.All,
+            },
         });
         return files.Select(f => f.TryGetLocalPath()).FirstOrDefault(p => !string.IsNullOrEmpty(p));
     }

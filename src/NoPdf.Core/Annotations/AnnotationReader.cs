@@ -67,7 +67,8 @@ public static class AnnotationReader
     private static PdfAnnotationModel? Parse(PdfDictionary d, string subtype, int pageIndex)
     {
         var color = ReadColor(d, "/C") ?? AnnotColor.Red;
-        double width = ReadBorderWidth(d);
+        double? borderRaw = ReadBorderWidth(d);
+        double width = borderRaw ?? 2.0;
         string? contents = d.Elements.ContainsKey("/Contents") ? d.Elements.GetString("/Contents") : null;
 
         switch (subtype)
@@ -103,15 +104,21 @@ public static class AnnotationReader
                 var rect = ReadRect(d, "/Rect");
                 if (rect is null) return null;
                 double fontSize = ParseFontSize(d.Elements.ContainsKey("/DA") ? d.Elements.GetString("/DA") : null);
+                // Only draw a frame if the source explicitly defines a non-zero border
+                // width. Without this, external free-text/typewriter markup (which has
+                // no /BS) would all get a default 2pt box drawn around it.
+                bool hasBorder = borderRaw is > 0;
+                double ftWidth = borderRaw ?? 0;
                 bool callout = d.Elements.GetName("/IT") == "/FreeTextCallout" || d.Elements.ContainsKey("/CL");
                 if (callout)
                 {
                     var cl = ReadReals(d, "/CL");
                     var tip = cl.Count >= 2 ? new PdfPoint(cl[0], cl[1]) : new PdfPoint(rect.Value.Left, rect.Value.Bottom);
                     PdfPoint? knee = cl.Count >= 6 ? new PdfPoint(cl[2], cl[3]) : null;
-                    return new CalloutAnnotation { PageIndex = pageIndex, Rect = rect.Value, Tip = tip, Knee = knee, FontSize = fontSize, Color = color, StrokeWidth = width, Contents = contents };
+                    // Callouts always keep their leader line; the frame follows the border.
+                    return new CalloutAnnotation { PageIndex = pageIndex, Rect = rect.Value, Tip = tip, Knee = knee, FontSize = fontSize, Color = color, StrokeWidth = hasBorder ? ftWidth : 1.0, Border = hasBorder, Contents = contents };
                 }
-                return new FreeTextAnnotation { PageIndex = pageIndex, Rect = rect.Value, FontSize = fontSize, Color = color, StrokeWidth = width, Contents = contents };
+                return new FreeTextAnnotation { PageIndex = pageIndex, Rect = rect.Value, FontSize = fontSize, Color = color, StrokeWidth = ftWidth, Border = hasBorder, Contents = contents };
             }
             case "/Text":
             {
@@ -188,7 +195,8 @@ public static class AnnotationReader
         return new AnnotColor(To255(c[0]), To255(c[1]), To255(c[2]));
     }
 
-    private static double ReadBorderWidth(PdfDictionary d)
+    /// <summary>The annotation's border width, or null when the source defines none.</summary>
+    private static double? ReadBorderWidth(PdfDictionary d)
     {
         var bs = d.Elements.GetDictionary("/BS");
         if (bs is not null && bs.Elements.ContainsKey("/W"))
@@ -196,7 +204,7 @@ public static class AnnotationReader
         var border = d.Elements.GetArray("/Border");
         if (border is not null && border.Elements.Count >= 3)
             return border.Elements.GetReal(2);
-        return 2.0;
+        return null;
     }
 
     private static bool HasArrow(PdfDictionary d)

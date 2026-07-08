@@ -155,8 +155,9 @@ public sealed class PageOverlay : Control
         if (_sigLogo is not null) return _sigLogo;
         try
         {
+            // Transparent-background PNG so it reads as a watermark, not a white tile.
             using var s = typeof(SignatureAnnotation).Assembly
-                .GetManifestResourceStream("NoPdf.Core.Assets.sig_logo.jpg");
+                .GetManifestResourceStream("NoPdf.Core.Assets.sig_logo.png");
             if (s is not null) _sigLogo = new Avalonia.Media.Imaging.Bitmap(s);
         }
         catch { }
@@ -167,15 +168,13 @@ public sealed class PageOverlay : Control
     {
         var rect = ToDip(sig.Rect);
         var color = Color.FromRgb(sig.Color.R, sig.Color.G, sig.Color.B);
-        ctx.FillRectangle(Brushes.White, rect);
         var logo = SigLogo();
         if (logo is not null)
         {
-            // Contain the (square) watermark, keeping its aspect ratio.
+            // Square watermark, aspect preserved, aligned to the left edge.
             var ls = logo.Size;
-            double sc = Math.Min(rect.Width / ls.Width, rect.Height / ls.Height);
-            double w = ls.Width * sc, h = ls.Height * sc;
-            var dest = new Rect(rect.X + (rect.Width - w) / 2, rect.Y + (rect.Height - h) / 2, w, h);
+            double sq = Math.Min(rect.Width, rect.Height);
+            var dest = new Rect(rect.X, rect.Y + (rect.Height - sq) / 2, sq, sq);
             ctx.DrawImage(logo, new Rect(ls), dest);
         }
         ctx.DrawRectangle(null, FramePen(sig, color), rect);

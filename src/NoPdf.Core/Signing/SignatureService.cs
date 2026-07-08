@@ -18,6 +18,30 @@ public static class SignatureService
         => X509CertificateLoader.LoadPkcs12FromFile(pfxPath, password,
             X509KeyStorageFlags.Exportable | X509KeyStorageFlags.UserKeySet);
 
+    /// <summary>
+    /// Creates a self-signed signing certificate (RSA-2048, valid 5 years) and writes
+    /// it as a password-protected PKCS#12 (.pfx) to <paramref name="destPfxPath"/>.
+    /// </summary>
+    public static void GenerateSelfSigned(string subjectName, string password, string destPfxPath)
+    {
+        if (string.IsNullOrWhiteSpace(subjectName)) subjectName = "noPDF Signature";
+        using var rsa = RSA.Create(2048);
+        var req = new CertificateRequest(
+            "CN=" + subjectName.Replace(",", " "), rsa,
+            HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        req.CertificateExtensions.Add(
+            new X509KeyUsageExtension(
+                X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, critical: true));
+        req.CertificateExtensions.Add(
+            new X509EnhancedKeyUsageExtension(
+                new OidCollection { new Oid("1.3.6.1.5.5.7.3.4") }, critical: false)); // emailProtection / doc signing
+        using var cert = req.CreateSelfSigned(
+            DateTimeOffset.Now.AddDays(-1), DateTimeOffset.Now.AddYears(5));
+        byte[] pfx = cert.Export(X509ContentType.Pfx, password);
+        Directory.CreateDirectory(Path.GetDirectoryName(destPfxPath)!);
+        File.WriteAllBytes(destPfxPath, pfx);
+    }
+
     /// <summary>Signs <paramref name="source"/> and writes the signed PDF to <paramref name="destPath"/>.</summary>
     public static void Sign(byte[] source, string destPath, X509Certificate2 cert,
         string? reason, string? location)

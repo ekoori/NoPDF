@@ -559,7 +559,12 @@
                              MaxHeight="150" Margin="8,0">
                         <ListBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:SignaturePreset">
-                                <TextBlock Text="{Binding Name}" FontSize="12"/>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="{Binding Name}" FontSize="12"/>
+                                    <TextBlock Text="{Binding Alias, StringFormat=':{0}'}" FontSize="11"
+                                               Foreground="{DynamicResource MutedForeground}"/>
+                                    <TextBlock Text="🔒" FontSize="11" IsVisible="{Binding UseCertificate}"/>
+                                </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
@@ -569,6 +574,10 @@
                             <StackPanel Spacing="4">
                                 <TextBlock Classes="muted" Text="Name" FontSize="11"/>
                                 <TextBox Text="{Binding Name}" FontSize="12"/>
+                            </StackPanel>
+                            <StackPanel Spacing="4">
+                                <TextBlock Classes="muted" Text="Alias (use with :sign &lt;alias&gt;)" FontSize="11"/>
+                                <TextBox Text="{Binding Alias}" FontSize="12"/>
                             </StackPanel>
                             <StackPanel Spacing="4">
                                 <TextBlock Classes="muted" Text="Frame colour" FontSize="11"/>
@@ -582,8 +591,32 @@
                                 <TextBlock Classes="muted" Text="Frame opacity" FontSize="11"/>
                                 <Slider Minimum="0" Maximum="1" Value="{Binding FrameOpacity}"/>
                             </StackPanel>
+
+                            <Border BorderBrush="{DynamicResource PanelBorder}" BorderThickness="0,1,0,0" Padding="0,10,0,0">
+                                <StackPanel Spacing="8">
+                                    <CheckBox Content="Use certificate (cryptographic signing)"
+                                              FontSize="12" IsChecked="{Binding UseCertificate}"/>
+                                    <StackPanel Spacing="8" IsVisible="{Binding UseCertificate}">
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Classes="muted" Text="Certificate (.pfx)" FontSize="11"/>
+                                            <TextBox Text="{Binding CertPath}" FontSize="11" Watermark="path to .pfx"/>
+                                        </StackPanel>
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Classes="muted" Text="Password" FontSize="11"/>
+                                            <TextBox Text="{Binding CertPassword}" FontSize="12" PasswordChar="•"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <Button Content="Browse…" FontSize="12"
+                                                    Command="{Binding $parent[Window].DataContext.BrowseCertificateCommand}"/>
+                                            <Button Content="Generate" FontSize="12"
+                                                    Command="{Binding $parent[Window].DataContext.GenerateCertificateCommand}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
                             <TextBlock Classes="muted" TextWrapping="Wrap" FontSize="11"
-                                       Text="Select the Signature tool and drag on a page to place a signature with this style."/>
+                                       Text="Select the Signature tool (or :sign alias) and drag on a page. Type the reason into the stamp; a certified signature prompts to save a signed copy when you finish."/>
                         </StackPanel>
                     </ScrollViewer>
                 </DockPanel>

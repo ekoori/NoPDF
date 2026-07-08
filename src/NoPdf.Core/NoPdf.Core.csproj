@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Assets\sig_logo.jpg" />
+    <EmbeddedResource Include="Assets\sig_logo.png" />
+    <EmbeddedResource Include="Assets\sig_logo_mask.bin" />
   </ItemGroup>
 
   <ItemGroup>

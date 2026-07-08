@@ -24,7 +24,8 @@ public sealed class AppConfig
     /// <summary>Name used on signatures; falls back to the OS user name if blank.</summary>
     public string UserName { get; set; } = "";
 
-    /// <summary>PKCS#12 (.pfx) certificate + password for :signcert.</summary>
+    /// <summary>Legacy global certificate; certificates are now set per signature
+    /// in the signatures panel. Kept so old config files still parse.</summary>
     public string CertPath { get; set; } = "";
     public string CertPassword { get; set; } = "";
     public string SignerName => string.IsNullOrWhiteSpace(UserName) ? Environment.UserName : UserName;
@@ -266,7 +267,8 @@ theme: dark               # dark | light | inherit (follow the OS)
 show_toolbar: false       # the icon toolbar is hidden by default
 show_titlebar: false      # hide the OS window title bar (min/max/close)
 user_name: ""             # name printed on signatures (blank = OS user)
-cert_path: ""             # .pfx certificate for :signcert (cryptographic signing)
+# Certificates are configured per signature in the signatures panel (:signatures).
+cert_path: ""             # legacy global .pfx (unused)
 cert_password: ""
 command_history_size: 200
 history_visible: 5        # history lines shown above the ":" line

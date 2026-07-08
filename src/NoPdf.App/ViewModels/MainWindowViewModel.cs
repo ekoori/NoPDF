@@ -50,11 +50,86 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void AddSignaturePreset()
     {
-        var p = new SignaturePreset { Name = Config.SignerName };
+        var p = new SignaturePreset { Name = Config.SignerName, Alias = NextAlias() };
         HookPreset(p);
         SignaturePresets.Add(p);
         SelectedSignaturePreset = p;
         SaveSignaturePresets();
+    }
+
+    /// <summary>A unique default alias like "sig", "sig2", …</summary>
+    private string NextAlias()
+    {
+        for (int i = 1; ; i++)
+        {
+            string a = i == 1 ? "sig" : "sig" + i;
+            if (!SignaturePresets.Any(p => string.Equals(p.Alias, a, StringComparison.OrdinalIgnoreCase)))
+                return a;
+        }
+    }
+
+    /// <summary>Selects the preset whose alias matches (used by <c>:sign &lt;alias&gt;</c>).</summary>
+    public bool SelectSignaturePresetByAlias(string alias)
+    {
+        var p = SignaturePresets.FirstOrDefault(x =>
+            string.Equals(x.Alias, alias, StringComparison.OrdinalIgnoreCase));
+        if (p is null) return false;
+        SelectedSignaturePreset = p;
+        return true;
+    }
+
+    /// <summary>Generates a self-signed certificate for the selected preset and enables it.</summary>
+    [RelayCommand]
+    private void GenerateCertificate()
+    {
+        var p = SelectedSignaturePreset;
+        if (p is null) return;
+        try
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NoPdf", "certs");
+            string safe = string.Concat((string.IsNullOrWhiteSpace(p.Alias) ? p.Name : p.Alias)
+                .Split(Path.GetInvalidFileNameChars()));
+            if (string.IsNullOrWhiteSpace(safe)) safe = "signature";
+            string dest = Path.Combine(dir, safe + ".pfx");
+            string pwd = string.IsNullOrEmpty(p.CertPassword) ? "noPDF" : p.CertPassword;
+
+            NoPdf.Core.Signing.SignatureService.GenerateSelfSigned(
+                string.IsNullOrWhiteSpace(p.Name) ? "noPDF Signature" : p.Name, pwd, dest);
+
+            p.CertPassword = pwd;
+            p.CertPath = dest;
+            p.UseCertificate = true;
+            StatusText = $"Generated certificate → {dest}";
+        }
+        catch (Exception ex) { StatusText = "Generate failed: " + ex.Message; }
+    }
+
+    /// <summary>
+    /// Called when a certified signature stamp's reason edit is committed: exports the
+    /// document with the stamp, prompts for a destination, and applies the certificate.
+    /// </summary>
+    public async void CertifySignature(DocumentViewModel doc, SignatureAnnotation sig)
+    {
+        if (sig.Certified) return;
+        sig.Certified = true; // one-shot
+        string? pfx = sig.CertPath;
+        if (string.IsNullOrWhiteSpace(pfx) || !File.Exists(pfx))
+        { StatusText = "Certificate not found: " + pfx; return; }
+
+        string dir = Path.GetDirectoryName(doc.FilePath) ?? "";
+        string name = $"{Path.GetFileNameWithoutExtension(doc.FilePath)}_signed.pdf";
+        string? dest = await PickSaveAs(dir, name);
+        if (dest is null) { StatusText = "Signing cancelled"; return; }
+        try
+        {
+            var bytes = doc.ExportWithAnnotations();
+            var cert = NoPdf.Core.Signing.SignatureService.LoadCertificate(pfx, sig.CertPassword ?? "");
+            string reason = sig.Contents ?? "";
+            await Task.Run(() => NoPdf.Core.Signing.SignatureService.Sign(bytes, dest, cert, reason, ""));
+            StatusText = $"Signed & certified → {Path.GetFileName(dest)}";
+        }
+        catch (Exception ex) { StatusText = "Sign failed: " + ex.Message; }
     }
 
     [RelayCommand]
@@ -74,8 +149,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             var p = new SignaturePreset
             {
-                Name = dto.Name, FrameColor = dto.FrameColor,
+                Name = dto.Name, Alias = dto.Alias, FrameColor = dto.FrameColor,
                 FrameThickness = dto.FrameThickness, FrameOpacity = dto.FrameOpacity,
+                UseCertificate = dto.UseCertificate, CertPath = dto.CertPath, CertPassword = dto.CertPassword,
             };
             HookPreset(p);
             SignaturePresets.Add(p);
@@ -92,8 +168,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private void SaveSignaturePresets() => _sigStore.Save(SignaturePresets.Select(p =>
         new SignaturePresetStore.Dto
         {
-            Name = p.Name, FrameColor = p.FrameColor,
+            Name = p.Name, Alias = p.Alias, FrameColor = p.FrameColor,
             FrameThickness = p.FrameThickness, FrameOpacity = p.FrameOpacity,
+            UseCertificate = p.UseCertificate, CertPath = p.CertPath, CertPassword = p.CertPassword,
         }));
 
     private void ApplyPresetToAllDocs() { foreach (var t in Tabs) ApplyPresetToDoc(t); }
@@ -107,8 +184,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             doc.SigColor = ParseHex(p.FrameColor, AnnotColor.Blue);
             doc.SigThickness = p.FrameThickness;
             doc.SigOpacity = p.FrameOpacity;
+            doc.SigUseCertificate = p.UseCertificate;
+            doc.SigCertPath = p.CertPath;
+            doc.SigCertPassword = p.CertPassword;
         }
-        else { doc.SignerName = Config.SignerName; doc.SigColor = AnnotColor.Blue; doc.SigThickness = 1.5; doc.SigOpacity = 1.0; }
+        else
+        {
+            doc.SignerName = Config.SignerName; doc.SigColor = AnnotColor.Blue;
+            doc.SigThickness = 1.5; doc.SigOpacity = 1.0;
+            doc.SigUseCertificate = false; doc.SigCertPath = ""; doc.SigCertPassword = "";
+        }
     }
 
     private static AnnotColor ParseHex(string hex, AnnotColor fallback)
@@ -164,6 +249,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     /// <summary>Set by the view; opens a single PDF (for insert/merge).</summary>
     public Func<Task<string?>>? OpenSingleFilePicker { get; set; }
+
+    /// <summary>Set by the view; opens a certificate (.pfx/.p12) picker.</summary>
+    public Func<Task<string?>>? OpenCertFilePicker { get; set; }
+
+    [RelayCommand]
+    private async Task BrowseCertificate()
+    {
+        var p = SelectedSignaturePreset;
+        if (p is null || OpenCertFilePicker is null) return;
+        var path = await OpenCertFilePicker();
+        if (!string.IsNullOrEmpty(path)) { p.CertPath = path; p.UseCertificate = true; }
+    }
 
     /// <summary>Set by the view; prompts for a destination path (suggested dir + name).</summary>
     public Func<string?, string?, Task<string?>>? SaveAsPicker { get; set; }
@@ -334,6 +431,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             var saved = ViewStates.Get(path);
             if (saved is not null) doc.InitialView = (saved.Zoom, saved.OffsetX, saved.OffsetY);
             doc.ViewStateSink = (z, x, y) => ViewStates.Set(path, z, x, y);
+            doc.CertifyRequested = sig => CertifySignature(doc, sig);
             Tabs.Add(doc);
             SelectedTab = doc;
             Recent.Add(path);
@@ -355,8 +453,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _closedTabs.Push((doc.FilePath, idx));   // remember for reopen/undo
         Tabs.Remove(doc);
         doc.Dispose();
-        if (Tabs.Count > 0)
-            SelectedTab = Tabs[Math.Clamp(idx, 0, Tabs.Count - 1)];
+        SelectedTab = Tabs.Count > 0
+            ? Tabs[Math.Clamp(idx, 0, Tabs.Count - 1)]
+            : null;   // no tabs left → show the start page
     }
 
     /// <summary>Reopens the most recently closed tab at its original position.</summary>

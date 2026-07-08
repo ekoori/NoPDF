@@ -21,9 +21,13 @@ Acrobat and every other viewer.
   arrow, polyline. Create, move, resize, delete; edit colour, line width, fill,
   font, and opacity in a properties panel. Existing annotations are read back
   and stay editable.
-- **Signatures** — place one or more visible signature stamps (signer name,
-  optional note, timestamp) over a faint noPDF watermark; `:signatures` lists
-  them (including embedded digital-signature fields).
+- **Signatures** — reusable signature presets (name, alias, frame style, and an
+  optional certificate) in the `:signatures` panel. Place a stamp with the
+  Signature tool or `:sign <alias>`, then type the signing reason into the stamp.
+  A preset marked *Use certificate* (browse an existing `.pfx` or **Generate** a
+  self-signed one) cryptographically signs the document — when you finish typing
+  the reason, noPDF prompts to save a signed copy. `:signatures` also lists
+  embedded digital-signature fields.
 - **Bookmarks** — the PDF outline plus your own page bookmarks, in a side panel.
 - **Page operations** — a thumbnails panel with multi-select for rotate,
   reorder, delete, insert, and merge; export page ranges.
@@ -91,7 +95,7 @@ authenticated once with `gh auth login`.
 | **Find** | `find <text>`, `findnext` (`n`), `findprev` (`N`) |
 | **Tools** | `hand`, `select`, `highlight`, `note`, `textbox`, `callout`, `line`, `rect`, `arrow`, `polyline`, `signature` (`sign`) |
 | **Edit** | `undo`, `redo`, `copy`, `delannot` |
-| **Signatures** | `sign` (place), `signatures` (list) |
+| **Signatures** | `sign [alias]` (place, optionally selecting a preset), `signatures` (panel), `siglist` (list) |
 | **Pages** | `rotate <range> [cw\|ccw\|180]`, `delete <range>`, `insert <path> [at]`, `merge <path>`, `extract <range> [path]` |
 | **Panels / UI** | `toc`, `pages`, `props`, `toolbar` |
 | **Marks** | `m`/`go <name>` (file quickmarks), `marks` (picker), `bookmark`/`bmdel <name>` (page bookmarks) |

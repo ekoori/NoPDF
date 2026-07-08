@@ -47,11 +47,18 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public Action<double, double, double>? ViewStateSink { get; set; }
     public void ReportViewState(double zoom, double ox, double oy) => ViewStateSink?.Invoke(zoom, ox, oy);
 
+    /// <summary>Raised when a certified signature stamp is committed, to run the signing flow.</summary>
+    public Action<SignatureAnnotation>? CertifyRequested { get; set; }
+
     /// <summary>Name printed on new signatures (from config or active preset).</summary>
     public string SignerName { get; set; } = "";
     public AnnotColor SigColor { get; set; } = AnnotColor.Blue;
     public double SigThickness { get; set; } = 1.5;
     public double SigOpacity { get; set; } = 1.0;
+    /// <summary>When set, new signatures are certified with the certificate below.</summary>
+    public bool SigUseCertificate { get; set; }
+    public string SigCertPath { get; set; } = "";
+    public string SigCertPassword { get; set; } = "";
 
     // Text-box annotation defaults (from config).
     public double TextboxFontSize { get; set; } = 14;
