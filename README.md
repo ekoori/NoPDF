@@ -53,31 +53,30 @@ dotnet publish src/NoPdf.App -c Release -r win-x64 --self-contained \
 
 ## Releases & versioning
 
-The version lives in a single place — `Directory.Build.props`:
-`InformationalVersion` (e.g. `0.0.1-beta.01`) is the full label used by the app
-and the git tag; `VersionPrefix` (e.g. `0.0.1`) is the numeric File/Product
-version the OS reads. The `:version` command and the start page show it as
-`noPDF v<version>`.
+Version is `v0.0.X-beta.YY`. **X** (the public release line) is `VersionPrefix` in
+`Directory.Build.props`; **YY** (the build number) lives in the gitignored
+`build-number.txt` and is **auto-incremented on every Debug build** by
+`Directory.Build.targets`, so each build is uniquely versioned. The `:version`
+command and the start page show `noPDF v0.0.X-beta.YY`.
 
-The version has two parts: `X` is the public release number and `YY` is the
-local build number. A plain local build bumps `YY`; a public release bumps `X`
-and resets `YY` to `00`. GitHub therefore only ever holds the `-beta.00` build of
-each `X`, while local `Release/` accumulates every `YY`.
-
-To cut a release, run the script from the repo root (PowerShell):
+Release builds read the current `YY` without incrementing, so all platform
+artifacts of one release share a version. To cut a release, run from the repo root
+(PowerShell):
 
 ```powershell
-./scripts/release.ps1                    # local build: X unchanged, YY++, into Release/ only
-./scripts/release.ps1 -Version 0.0.2-beta.01   # set an exact version, then build
-./scripts/release.ps1 -Publish           # public release: X++, YY=00, commit + tag + GitHub Release
+./scripts/release.ps1                    # local build at the current version, into Release/
+./scripts/release.ps1 -Publish           # public release: X++, YY=00, roll notes, tag + GitHub Release
+./scripts/release.ps1 -Version 0.0.3-beta.00   # set an exact version, then build
 ```
 
 It publishes self-contained single-file binaries for `win-x64`, `win-x86`,
 `linux-x64`, and `osx-x64` into `Release/` (gitignored), named
-`noPDF-v<version>-<rid>`.
+`noPDF-v0.0.X-beta.YY-<rid>`.
 
-`-Publish` uploads those binaries to a GitHub Release for the tag (prerelease when
-the version has a `-suffix`). It requires the [GitHub CLI](https://cli.github.com)
+`-Publish` rolls [`RELEASE_NOTES.md`](RELEASE_NOTES.md) (promotes the *Unreleased*
+section to a dated release heading), commits the bump, tags, and uploads the
+binaries to a prerelease GitHub Release (notes = that file). GitHub only ever holds
+the `-beta.00` build of each `X`. Requires the [GitHub CLI](https://cli.github.com)
 authenticated once with `gh auth login`.
 
 ## Using the command line

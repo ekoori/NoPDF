@@ -1,10 +1,11 @@
-﻿<Project>
-  <!-- Single source of truth for the app version.
-       InformationalVersion is the full display/tag value (git tag = "v" + it).
-       VersionPrefix is the numeric X.Y.Z the OS reads as File/Product version.
-       Bump both together, or use  scripts/release.ps1 -Version 0.0.2-beta.01 . -->
+<Project>
+  <!-- Version source of truth.
+       VersionPrefix (0.0.X) is the public release line — bump X for a public
+       release via  scripts/release.ps1 -Publish .
+       The build number YY is kept in the gitignored  build-number.txt  and is
+       auto-incremented on every Debug build (see Directory.Build.targets), so the
+       app version is  0.0.X-beta.YY . -->
   <PropertyGroup>
-    <InformationalVersion>0.0.2-beta.00</InformationalVersion>
     <VersionPrefix>0.0.2</VersionPrefix>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>

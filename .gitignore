@@ -13,3 +13,6 @@ obj/
 ## Test / scratch
 *.received.*
 TestResults/
+
+## Auto-incremented build counter (local only)
+build-number.txt

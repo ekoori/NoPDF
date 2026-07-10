@@ -3,23 +3,23 @@
   Builds self-contained single-file noPDF releases for all target platforms.
 
 .DESCRIPTION
-  Version format is  v0.0.X-beta.YY :
-    * X  is the public release number.
-    * YY is the local build number (zero-padded).
+  Version is  v0.0.X-beta.YY :
+    * X  (VersionPrefix in Directory.Build.props) is the public release line.
+    * YY (build-number.txt, gitignored) is auto-incremented on every Debug build.
 
-  Running the script with no switches is a LOCAL build: it bumps YY, builds all
-  target platforms as self-contained single-file executables into  <repo>\Release
-  named  noPDF-v0.0.X-beta.YY-<rid>[.exe] , and does not touch git or GitHub.
+  With no switches this is a LOCAL build: it publishes all target platforms as
+  self-contained single-file executables into  <repo>\Release  named
+  noPDF-v0.0.X-beta.YY-<rid>[.exe] , at the CURRENT version, touching neither the
+  version files nor git.
 
-  Running with -Publish is a PUBLIC release: it bumps X, resets YY to 00, builds,
-  commits the version bump, tags  v0.0.X-beta.00 , and creates a GitHub Release
-  with the binaries attached. GitHub therefore only ever holds the -beta.00 build
-  of each X.
+  With -Publish it is a PUBLIC release: X += 1, YY resets to 00, it rolls
+  RELEASE_NOTES.md, commits the version bump + notes, tags v0.0.X-beta.00, and
+  creates a GitHub Release with the binaries attached.
 
 .EXAMPLE
-  .\scripts\release.ps1                        # local build: X unchanged, YY++
-  .\scripts\release.ps1 -Publish               # public release: X++, YY=00, tag + GitHub Release
-  .\scripts\release.ps1 -Version 0.0.3-beta.00 # set an exact version, then build
+  .\scripts\release.ps1                         # local build at the current version
+  .\scripts\release.ps1 -Publish                # public release: X++, YY=00, tag + GitHub Release
+  .\scripts\release.ps1 -Version 0.0.3-beta.00  # set an exact version, then build
 #>
 [CmdletBinding()]
 param(
@@ -30,42 +30,47 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $propsPath = Join-Path $root 'Directory.Build.props'
+$buildNoPath = Join-Path $root 'build-number.txt'
+$notesPath = Join-Path $root 'RELEASE_NOTES.md'
 $proj = Join-Path $root 'src\NoPdf.App\NoPdf.App.csproj'
 $outDir = Join-Path $root 'Release'
 
-function Parse-Version([string]$v) {
-    if ($v -notmatch '^(\d+)\.(\d+)\.(\d+)-beta\.(\d+)$') {
-        throw "Version '$v' is not in the expected 0.0.X-beta.YY form"
-    }
-    [pscustomobject]@{
-        Major = [int]$Matches[1]; Minor = [int]$Matches[2]
-        Patch = [int]$Matches[3]; Beta  = [int]$Matches[4]
-    }
+function Get-Prefix {
+    [xml]$props = Get-Content $propsPath
+    $p = ($props.Project.PropertyGroup | Where-Object { $_.VersionPrefix }).VersionPrefix
+    if (-not $p) { throw "Could not read <VersionPrefix> from $propsPath" }
+    $p
 }
-function Format-Version($p) { '{0}.{1}.{2}-beta.{3:00}' -f $p.Major, $p.Minor, $p.Patch, $p.Beta }
+function Set-Prefix($prefix) {
+    (Get-Content $propsPath -Raw) `
+        -replace '<VersionPrefix>[^<]*</VersionPrefix>', "<VersionPrefix>$prefix</VersionPrefix>" |
+        Set-Content $propsPath -Encoding utf8 -NoNewline
+}
+function Get-BuildNo {
+    if (Test-Path $buildNoPath) { $n = (Get-Content $buildNoPath -Raw).Trim(); if ($n -ne '') { return [int]$n } }
+    0
+}
+function Set-BuildNo($n) { Set-Content $buildNoPath -Value "$n" -Encoding ascii }
 
-# ----- Decide the version for this build -----
-[xml]$props = Get-Content $propsPath
-$current = ($props.Project.PropertyGroup | Where-Object { $_.InformationalVersion }).InformationalVersion
-if (-not $current) { throw "Could not read <InformationalVersion> from $propsPath" }
+# ----- Decide the version -----
+$prefix = Get-Prefix
+$buildNo = Get-BuildNo
 
 if ($Version) {
-    $ver = $Version
+    if ($Version -notmatch '^(\d+\.\d+\.\d+)-beta\.(\d+)$') { throw "Version '$Version' is not 0.0.X-beta.YY" }
+    $prefix = $Matches[1]; $buildNo = [int]$Matches[2]
+    Set-Prefix $prefix; Set-BuildNo $buildNo
 }
-else {
-    $p = Parse-Version $current
-    if ($Publish) { $p.Patch += 1; $p.Beta = 0 }   # public release: X++, YY=00
-    else          { $p.Beta  += 1 }                 # local build:   YY++
-    $ver = Format-Version $p
+elseif ($Publish) {
+    $parts = $prefix.Split('.')
+    $parts[2] = [string]([int]$parts[2] + 1)   # X += 1
+    $prefix = ($parts -join '.')
+    $buildNo = 0
+    Set-Prefix $prefix; Set-BuildNo $buildNo
 }
-$prefix = ($ver -split '-')[0]   # numeric 0.0.X for the OS File/Product version
+# else: local build uses the current prefix + build number as-is.
 
-# ----- Persist the version (single source of truth) -----
-(Get-Content $propsPath -Raw) `
-    -replace '<InformationalVersion>[^<]*</InformationalVersion>', "<InformationalVersion>$ver</InformationalVersion>" `
-    -replace '<VersionPrefix>[^<]*</VersionPrefix>', "<VersionPrefix>$prefix</VersionPrefix>" |
-    Set-Content $propsPath -Encoding utf8 -NoNewline
-
+$ver = "$prefix-beta." + ('{0:00}' -f $buildNo)
 $verTag = "v$ver"
 Write-Host ("{0} build: noPDF {1}" -f ($(if ($Publish) { 'PUBLIC' } else { 'Local' })), $verTag) -ForegroundColor Cyan
 
@@ -83,6 +88,7 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 foreach ($t in $targets) {
     $rid = $t.rid
     Write-Host "  publishing $rid ..." -ForegroundColor Yellow
+    # Release config does not increment YY, so every platform shares this version.
     dotnet publish $proj -c Release -r $rid --self-contained true `
         -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
         -p:DebugType=none -p:DebugSymbols=false 2>&1 | Out-Null
@@ -102,17 +108,23 @@ if (-not $Publish) {
     return
 }
 
-# ----- Public release: commit the version bump, tag, push, GitHub Release -----
+# ----- Roll RELEASE_NOTES.md: promote Unreleased to this version, start a fresh one -----
+if (Test-Path $notesPath) {
+    $notes = Get-Content $notesPath -Raw
+    $date = Get-Date -Format 'yyyy-MM-dd'
+    $replacement = "## Unreleased ($prefix line)`r`n`r`n_Nothing yet._`r`n`r`n## $verTag - $date"
+    $notes = [regex]::Replace($notes, '## Unreleased \([^)]*\)', $replacement, 1)
+    Set-Content $notesPath -Value $notes -Encoding utf8
+}
+
+# ----- Commit, tag, push, GitHub Release -----
 Push-Location $root
 try {
-    # Native git/gh write progress and warnings (e.g. "LF will be replaced by CRLF")
-    # to stderr. Under $ErrorActionPreference='Stop' PowerShell 5.1 wraps those lines
-    # in a NativeCommandError and throws even on exit code 0, aborting the release.
-    # Relax to Continue here and gate every step on $LASTEXITCODE instead.
+    # git/gh write progress + warnings to stderr; relax so they don't abort the run.
     $ErrorActionPreference = 'Continue'
 
-    git commit $propsPath -m "Release $verTag" 2>$null
-    if ($LASTEXITCODE -eq 0) { Write-Host "Committed version bump" } else { Write-Host "Nothing to commit (version already committed)" }
+    git commit $propsPath $notesPath -m "Release $verTag" 2>$null
+    if ($LASTEXITCODE -eq 0) { Write-Host "Committed version bump + notes" } else { Write-Host "Nothing to commit" }
     git push origin HEAD 2>$null
     if ($LASTEXITCODE -ne 0) { throw "git push origin HEAD failed" }
 
@@ -141,7 +153,7 @@ try {
     }
     else {
         Write-Host "Creating GitHub Release $verTag..."
-        & $gh release create $verTag @assets --title "noPDF $verTag" --notes "noPDF $verTag" --prerelease
+        & $gh release create $verTag @assets --title "noPDF $verTag" --notes-file $notesPath --prerelease
     }
     if ($LASTEXITCODE -ne 0) { throw "gh release failed for $verTag" }
     Write-Host "Published GitHub Release $verTag with $($assets.Count) asset(s)" -ForegroundColor Green

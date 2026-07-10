@@ -1,0 +1,31 @@
+<Project>
+  <!--
+    Computes the app version as  $(VersionPrefix)-beta.YY  where YY is a build
+    counter stored in the gitignored  build-number.txt . Every Debug build of
+    NoPdf.App bumps YY by one, so each build is uniquely versioned; Release builds
+    (used by scripts/release.ps1) read the current YY without incrementing so all
+    four platform artifacts share one version.
+  -->
+  <Target Name="RevBuildNumber"
+          BeforeTargets="CoreGenerateAssemblyInfo;GetAssemblyVersion"
+          Condition="'$(MSBuildProjectName)' == 'NoPdf.App' and '$(DesignTimeBuild)' != 'true'">
+    <PropertyGroup>
+      <_BuildNoFile>$(MSBuildThisFileDirectory)build-number.txt</_BuildNoFile>
+      <_BuildNoRaw Condition="Exists('$(_BuildNoFile)')">$([System.IO.File]::ReadAllText('$(_BuildNoFile)'))</_BuildNoRaw>
+      <_BuildNo>$(_BuildNoRaw.Trim())</_BuildNo>
+      <_BuildNo Condition="'$(_BuildNo)' == ''">0</_BuildNo>
+    </PropertyGroup>
+
+    <!-- Increment only on Debug builds. -->
+    <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+      <_BuildNo>$([MSBuild]::Add($(_BuildNo), 1))</_BuildNo>
+    </PropertyGroup>
+    <WriteLinesToFile Condition="'$(Configuration)' == 'Debug'"
+                      File="$(_BuildNoFile)" Lines="$(_BuildNo)" Overwrite="true" />
+
+    <PropertyGroup>
+      <_BuildNoPadded>$([System.String]::Format('{0:00}', $([System.Int32]::Parse($(_BuildNo)))))</_BuildNoPadded>
+      <InformationalVersion>$(VersionPrefix)-beta.$(_BuildNoPadded)</InformationalVersion>
+    </PropertyGroup>
+  </Target>
+</Project>
