@@ -19,7 +19,6 @@ public partial class PageView : UserControl
     private Mode _mode;
     private bool _dragged;
     private PdfPoint _startPage;
-    private PdfPoint _lastPage;
     private int _resizeId = -1;
     private bool _gestureChanged;
     private PdfAnnotationModel? _active;

@@ -21,7 +21,7 @@ public static class LinkReader
         try
         {
             using var input = new MemoryStream(source);
-            doc = PdfReader.Open(input, PdfDocumentOpenMode.ReadOnly);
+            doc = PdfReader.Open(input, PdfDocumentOpenMode.Import);
         }
         catch { return result; }
 

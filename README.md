@@ -97,8 +97,9 @@ authenticated once with `gh auth login`.
 | **Zoom** | `zoom <pct\|in\|out\|reset\|width\|page>`, `fit`, `fitwidth` |
 | **Find** | `find <text>`, `findnext` (`n`), `findprev` (`N`) |
 | **Tools** | `hand`, `select`, `highlight`, `note`, `textbox`, `callout`, `line`, `rect`, `arrow`, `polyline`, `signature` (`sign`) |
-| **Edit** | `undo`, `redo`, `copy`, `delannot` |
+| **Edit** | `undo`, `redo`, `copy`, `delannot`, `yank`/`paste` (annotations), `group`/`ungroup` |
 | **Signatures** | `sign [alias]` (place, optionally selecting a preset), `signatures` (panel), `siglist` (list) |
+| **Links** | `hint` / `follow` (`f`) — label every on-screen link, type the label to follow it |
 | **Pages** | `rotate <range> [cw\|ccw\|180]`, `delete <range>`, `insert <path> [at]`, `merge <path>`, `extract <range> [path]` |
 | **Panels / UI** | `toc`, `pages`, `props`, `toolbar` |
 | **Marks** | `m`/`go <name>` (file quickmarks), `marks` (picker), `bookmark`/`bmdel <name>` (page bookmarks) |
@@ -108,9 +109,20 @@ authenticated once with `gh auth login`.
 ### Default hotkeys
 
 `hl` highlight · `gg`/`G` first/last page · `j`/`k` + arrows scroll ·
-`H`/`L` prev/next tab · `T` new tab · `X` close · `u`/`U` (or `Ctrl+Z`/`Ctrl+R`)
-undo/redo · `zi`/`zo`/`zz`/`zw`/`zp` zoom · `b` bookmarks · `P` pages ·
-`yy` copy selection · `YY` copy file path · `d` delete annotation.
+`f` follow links · `H`/`L` prev/next tab · `T` new tab · `X` close ·
+`u`/`U` (or `Ctrl+Z`/`Ctrl+R`) undo/redo · `zi`/`zo`/`zz`/`zw`/`zp` zoom ·
+`b` bookmarks · `P` pages · `yy` copy selection · `YY` copy file path ·
+`d` delete annotation.
+
+### Mouse & editing
+
+Ctrl+wheel zooms around the cursor; the middle mouse button pans. With the
+**Select** tool: shift-click adds annotations to the selection (edit colour /
+width / font / opacity for all at once in the properties panel), drag moves the
+whole selection, **Shift** constrains to one axis, **Ctrl+drag** duplicates.
+`Ctrl+C`/`Ctrl+V` copy & paste annotations; `Ctrl+G` / `Ctrl+Shift+G` group /
+ungroup. `Ctrl+V` also pastes a **screenshot** from the clipboard as a resizable
+image (with an optional frame and adjustable opacity).
 
 ## Configuration
 
