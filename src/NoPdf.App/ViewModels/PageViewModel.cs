@@ -66,6 +66,12 @@ public sealed partial class PageViewModel : ViewModelBase
     /// <summary>Raised when overlay-drawn content (selection/highlights) changes.</summary>
     public event Action? OverlayInvalidated;
 
+    /// <summary>Raised when a find match selection is set, so the view can reveal it.</summary>
+    public event Action? FindRevealRequested;
+
+    /// <summary>Set when a find match awaits scrolling into view; the view clears it.</summary>
+    public bool PendingFindReveal { get; set; }
+
     public PageViewModel(DocumentViewModel owner, int pageIndex, PageInfo size)
     {
         _owner = owner;
@@ -138,7 +144,16 @@ public sealed partial class PageViewModel : ViewModelBase
             try
             {
                 var tp = doc.GetTextPage(PageIndex);
-                Dispatcher.UIThread.Post(() => { _textPage = tp; _textLoading = false; });
+                Dispatcher.UIThread.Post(() =>
+                {
+                    _textPage = tp; _textLoading = false;
+                    // A find selection may have been set before the text loaded.
+                    if (_selAnchor >= 0)
+                    {
+                        UpdateSelectionRects();
+                        if (PendingFindReveal) FindRevealRequested?.Invoke();
+                    }
+                });
             }
             catch { _textLoading = false; }
         });
@@ -165,10 +180,13 @@ public sealed partial class PageViewModel : ViewModelBase
     public void SetSelectionRange(int start, int endInclusive)
     {
         _owner.SetActiveSelectionPage(this);
-        if (_textPage is null) { EnsureTextLoaded(); return; }
         _selAnchor = start;
         _selCurrent = endInclusive;
+        // Ask the view to scroll this match into view (page may not be realized yet).
+        PendingFindReveal = true;
+        if (_textPage is null) { EnsureTextLoaded(); FindRevealRequested?.Invoke(); return; }
         UpdateSelectionRects();
+        FindRevealRequested?.Invoke();
     }
 
     public void ClearSelection()

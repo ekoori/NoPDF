@@ -201,13 +201,17 @@ public partial class DocumentView : UserControl
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (_vm?.CurrentTool != EditorTool.Hand) return;
+        // Pan with the Hand tool (left button) or the middle mouse button (any tool).
+        var props = e.GetCurrentPoint(this).Properties;
+        bool hand = _vm?.CurrentTool == EditorTool.Hand && props.IsLeftButtonPressed;
+        if (!hand && !props.IsMiddleButtonPressed) return;
         var sv = Scroll;
         if (sv is null) return;
 
         _panning = true;
         _panStartPointer = e.GetPosition(this);
         _panStartOffset = sv.Offset;
+        e.Pointer.Capture(PageList);
         e.Handled = true;
     }
 
@@ -226,6 +230,7 @@ public partial class DocumentView : UserControl
     {
         if (!_panning) return;
         _panning = false;
+        e.Pointer.Capture(null);
         e.Handled = true;
     }
 
@@ -233,12 +238,30 @@ public partial class DocumentView : UserControl
     {
         // Ctrl + wheel = zoom; plain wheel scrolls normally.
         if (_vm is null || !e.KeyModifiers.HasFlag(KeyModifiers.Control)) return;
+        var sv = Scroll;
+        if (sv is null) return;
 
-        if (e.Delta.Y > 0) _vm.SetZoom(ZoomFrom(_vm, 1.1));
-        else if (e.Delta.Y < 0) _vm.SetZoom(ZoomFrom(_vm, 1 / 1.1));
+        // Anchor the document point under the cursor so the same spot on the same
+        // page stays put across the zoom (extent scales, so anchor by extent ratio).
+        var mouse = e.GetPosition(sv);
+        double exW = sv.Extent.Width, exH = sv.Extent.Height;
+        double ratioX = exW > 0 ? (sv.Offset.X + mouse.X) / exW : 0;
+        double ratioY = exH > 0 ? (sv.Offset.Y + mouse.Y) / exH : 0;
+
+        double factor = e.Delta.Y > 0 ? 1.1 : 1 / 1.1;
+        _vm.SetZoom(_vm.ZoomPercent / 100.0 * factor);
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            var s = Scroll;
+            if (s is null) return;
+            double nW = s.Extent.Width, nH = s.Extent.Height;
+            double maxX = Math.Max(0, nW - s.Viewport.Width);
+            double maxY = Math.Max(0, nH - s.Viewport.Height);
+            s.Offset = new Vector(
+                Math.Clamp(ratioX * nW - mouse.X, 0, maxX),
+                Math.Clamp(ratioY * nH - mouse.Y, 0, maxY));
+        }, DispatcherPriority.Background);
         e.Handled = true;
     }
-
-    private static double ZoomFrom(DocumentViewModel vm, double factor)
-        => vm.ZoomPercent / 100.0 * factor;
 }

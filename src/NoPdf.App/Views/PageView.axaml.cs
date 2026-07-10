@@ -40,11 +40,40 @@ public partial class PageView : UserControl
 
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
-        if (_current is not null && this.IsAttachedToVisualTree())
-            _current.SetRealized(false);
+        if (_current is not null)
+        {
+            if (this.IsAttachedToVisualTree()) _current.SetRealized(false);
+            _current.FindRevealRequested -= OnFindReveal;
+        }
         _current = DataContext as PageViewModel;
-        if (_current is not null && this.IsAttachedToVisualTree())
-            _current.SetRealized(true);
+        if (_current is not null)
+        {
+            if (this.IsAttachedToVisualTree()) _current.SetRealized(true);
+            _current.FindRevealRequested += OnFindReveal;
+            if (_current.PendingFindReveal) OnFindReveal();
+        }
+    }
+
+    /// <summary>Scrolls the current find-match selection into view.</summary>
+    private void OnFindReveal()
+    {
+        var pg = _current;
+        if (pg is null || !pg.PendingFindReveal) return;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (_current != pg || !pg.PendingFindReveal) return;
+            var rects = pg.SelectionRects;
+            if (rects.Count == 0) return; // text not ready yet; will fire again on load
+            double l = double.MaxValue, b = double.MaxValue, r = double.MinValue, t = double.MinValue;
+            foreach (var q in rects)
+            {
+                if (q.Left < l) l = q.Left; if (q.Bottom < b) b = q.Bottom;
+                if (q.Right > r) r = q.Right; if (q.Top > t) t = q.Top;
+            }
+            pg.PendingFindReveal = false;
+            var dip = pg.Transform.ToDip(new TextRect(l, b, r, t));
+            PageArea.BringIntoView(dip.Inflate(48)); // margin so the match isn't flush to the edge
+        }, Avalonia.Threading.DispatcherPriority.Background);
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)

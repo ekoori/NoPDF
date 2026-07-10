@@ -59,18 +59,21 @@ and the git tag; `VersionPrefix` (e.g. `0.0.1`) is the numeric File/Product
 version the OS reads. The `:version` command and the start page show it as
 `noPDF v<version>`.
 
+The version has two parts: `X` is the public release number and `YY` is the
+local build number. A plain local build bumps `YY`; a public release bumps `X`
+and resets `YY` to `00`. GitHub therefore only ever holds the `-beta.00` build of
+each `X`, while local `Release/` accumulates every `YY`.
+
 To cut a release, run the script from the repo root (PowerShell):
 
 ```powershell
-./scripts/release.ps1                    # build all four platforms at the current version
-./scripts/release.ps1 -Version 0.0.2-beta.01   # bump the version, then build
-./scripts/release.ps1 -Tag -Push         # also create & push the git tag v<version>
-./scripts/release.ps1 -Publish           # tag, push, and create a GitHub Release with
-                                         #   the four binaries attached (needs gh)
+./scripts/release.ps1                    # local build: X unchanged, YY++, into Release/ only
+./scripts/release.ps1 -Version 0.0.2-beta.01   # set an exact version, then build
+./scripts/release.ps1 -Publish           # public release: X++, YY=00, commit + tag + GitHub Release
 ```
 
-It publishes self-contained single-file binaries for `win-x64`, `linux-x64`,
-`osx-x64`, and `osx-arm64` into `Release/` (gitignored), named
+It publishes self-contained single-file binaries for `win-x64`, `win-x86`,
+`linux-x64`, and `osx-x64` into `Release/` (gitignored), named
 `noPDF-v<version>-<rid>`.
 
 `-Publish` uploads those binaries to a GitHub Release for the tag (prerelease when
