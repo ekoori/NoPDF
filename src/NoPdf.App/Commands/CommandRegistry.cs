@@ -104,6 +104,8 @@ public sealed class CommandRegistry
             ["yank"] = (_, _) => { Doc?.CopySelectedAnnotations(); return Msg("Copied annotation(s)"); },
             ["paste"] = (_, _) => { Doc?.PasteAnnotations(); return Msg(null); },
             ["marks"] = (_, _) => Task.FromResult(OpenMarks()),
+            ["hint"] = (_, _) => Msg(Doc is null ? "No document" : (Doc.EnterHintMode() ? null : "No links on screen")),
+            ["follow"] = (_, _) => Msg(Doc is null ? "No document" : (Doc.EnterHintMode() ? null : "No links on screen")),
             ["help"] = (_, _) => Task.FromResult<string?>("Commands: " + string.Join(", ", CommandNames())),
             ["version"] = (_, _) => Task.FromResult<string?>(NoPdf.App.AppVersion.Display),
         };

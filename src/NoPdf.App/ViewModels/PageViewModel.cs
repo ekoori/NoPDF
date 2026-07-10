@@ -33,6 +33,7 @@ public sealed partial class PageViewModel : ViewModelBase
     public int PageIndex { get; }
     public int PageNumber => PageIndex + 1;
     public DocumentViewModel Owner => _owner;
+    public bool IsRealized => _isRealized;
 
     /// <summary>Displayed page size in PDF points (rotation applied).</summary>
     public double PointWidth => _size.Width;

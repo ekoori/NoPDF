@@ -210,6 +210,22 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// <summary>Raised to minimise the window (title bar is hidden).</summary>
     public event Action? MinimizeRequested;
 
+    /// <summary>Opens an external link followed via hint mode (web/mail schemes only).</summary>
+    private void OpenExternalUri(string uri)
+    {
+        try
+        {
+            if (System.Uri.TryCreate(uri, UriKind.Absolute, out var u)
+                && u.Scheme is "http" or "https" or "mailto")
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri) { UseShellExecute = true });
+                StatusText = "Opened " + uri;
+            }
+            else StatusText = "Blocked link: " + uri;
+        }
+        catch (Exception ex) { StatusText = "Open link failed: " + ex.Message; }
+    }
+
     [RelayCommand] private void Minimize() => MinimizeRequested?.Invoke();
     [RelayCommand] private void Quit() => RequestQuit();
     [RelayCommand] private void SelectTab(DocumentViewModel? doc) { if (doc is not null) SelectedTab = doc; }
@@ -432,6 +448,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             if (saved is not null) doc.InitialView = (saved.Zoom, saved.OffsetX, saved.OffsetY);
             doc.ViewStateSink = (z, x, y) => ViewStates.Set(path, z, x, y);
             doc.CertifyRequested = sig => CertifySignature(doc, sig);
+            doc.OpenUriRequested += OpenExternalUri;
             Tabs.Add(doc);
             SelectedTab = doc;
             Recent.Add(path);

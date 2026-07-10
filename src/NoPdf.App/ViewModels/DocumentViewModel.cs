@@ -425,6 +425,99 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public int FindMatchCount => _findMatches.Count;
     public int FindCurrentOrdinal => _findIndex + 1;
 
+    // ----- Follow-links hint mode -----
+
+    /// <summary>One on-screen link hint: a label over a link rect + its destination.</summary>
+    public sealed class HintTarget
+    {
+        public int PageIndex;
+        public TextRect Rect = default;
+        public string Label = "";
+        public int? TargetPage;
+        public string? Uri;
+    }
+
+    private Dictionary<int, List<PdfLink>>? _links;
+    private readonly List<HintTarget> _hints = new();
+    public IReadOnlyList<HintTarget> Hints => _hints;
+    public bool IsHintMode { get; private set; }
+    public string HintPrefix { get; private set; } = "";
+
+    /// <summary>Raised to open an external URI when a link hint is followed.</summary>
+    public event Action<string>? OpenUriRequested;
+
+    private const string HintKeys = "fjdkslaghrueiwovncmbt";
+
+    /// <summary>Collects link hints for the currently visible (realized) pages.</summary>
+    public bool EnterHintMode()
+    {
+        ExitHintMode();
+        _links ??= LinkReader.ReadAll(_workingBytes);
+        var targets = new List<(int page, PdfLink link)>();
+        foreach (var p in Pages)
+            if (p.IsRealized && _links.TryGetValue(p.PageIndex, out var ls))
+                foreach (var l in ls) targets.Add((p.PageIndex, l));
+        if (targets.Count == 0) return false;
+
+        var labels = HintLabels(targets.Count);
+        for (int i = 0; i < targets.Count; i++)
+            _hints.Add(new HintTarget
+            {
+                PageIndex = targets[i].page, Rect = targets[i].link.Rect, Label = labels[i],
+                TargetPage = targets[i].link.TargetPage, Uri = targets[i].link.Uri,
+            });
+        IsHintMode = true;
+        HintPrefix = "";
+        NotifyAllPages();
+        return true;
+    }
+
+    /// <summary>Feeds a typed character; follows a link on a unique match, else narrows.</summary>
+    public void FeedHintKey(char c)
+    {
+        if (!IsHintMode) return;
+        string prefix = HintPrefix + char.ToLowerInvariant(c);
+        var matches = _hints.Where(h => h.Label.StartsWith(prefix)).ToList();
+        if (matches.Count == 0) { ExitHintMode(); return; }
+        var exact = matches.FirstOrDefault(h => h.Label == prefix);
+        if (exact is not null && matches.Count == 1) { Follow(exact); ExitHintMode(); return; }
+        HintPrefix = prefix;
+        NotifyAllPages();
+    }
+
+    public void ExitHintMode()
+    {
+        if (!IsHintMode && _hints.Count == 0) return;
+        IsHintMode = false;
+        HintPrefix = "";
+        _hints.Clear();
+        NotifyAllPages();
+    }
+
+    private void Follow(HintTarget h)
+    {
+        if (h.TargetPage is { } tp) GoToPage(tp + 1);
+        else if (!string.IsNullOrEmpty(h.Uri)) OpenUriRequested?.Invoke(h.Uri!);
+    }
+
+    private void NotifyAllPages() { foreach (var p in Pages) p.NotifyAnnotationChanged(); }
+
+    private static List<string> HintLabels(int n)
+    {
+        var labels = new List<string>(n);
+        if (n <= HintKeys.Length)
+        {
+            for (int i = 0; i < n; i++) labels.Add(HintKeys[i].ToString());
+        }
+        else
+        {
+            for (int i = 0; i < HintKeys.Length && labels.Count < n; i++)
+                for (int j = 0; j < HintKeys.Length && labels.Count < n; j++)
+                    labels.Add($"{HintKeys[i]}{HintKeys[j]}");
+        }
+        return labels;
+    }
+
     // ----- Save -----
 
     public IEnumerable<PdfAnnotationModel> AllAnnotations() => Pages.SelectMany(p => p.Annotations);

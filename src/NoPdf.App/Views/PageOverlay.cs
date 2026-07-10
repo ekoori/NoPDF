@@ -62,6 +62,37 @@ public sealed class PageOverlay : Control
         // Resize handles only make sense for a single-annotation selection.
         if (selset.Count == 1 && vm.Annotations.Contains(selset[0]))
             DrawHandles(context, selset[0]);
+
+        if (vm.Owner.IsHintMode)
+        {
+            string pfx = vm.Owner.HintPrefix;
+            foreach (var h in vm.Owner.Hints)
+            {
+                if (h.PageIndex != vm.PageIndex) continue;
+                if (pfx.Length > 0 && !h.Label.StartsWith(pfx)) continue;
+                DrawHint(context, h.Rect, h.Label, pfx);
+            }
+        }
+    }
+
+    private void DrawHint(DrawingContext ctx, TextRect rectPage, string label, string prefix)
+    {
+        var r = ToDip(rectPage);
+        string up = label.ToUpperInvariant();
+        var face = new Typeface("Consolas");
+        var ft = new FormattedText(up, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, face, 12, Brushes.Black);
+        double padX = 4, padY = 2, w = ft.Width + padX * 2, h = ft.Height + padY * 2;
+        double x = r.X, y = r.Y - h; if (y < 0) y = r.Y;
+        var box = new Rect(x, y, w, h);
+        ctx.FillRectangle(new SolidColorBrush(Color.FromRgb(255, 213, 79)), box, 3);
+        ctx.DrawRectangle(null, new Pen(new SolidColorBrush(Color.FromRgb(166, 124, 0)), 1), box, 3, 3);
+        ctx.DrawText(ft, new Point(x + padX, y + padY));
+        if (prefix.Length > 0)
+        {
+            var typed = new FormattedText(up[..Math.Min(prefix.Length, up.Length)], CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight, face, 12, new SolidColorBrush(Color.FromRgb(150, 150, 150)));
+            ctx.DrawText(typed, new Point(x + padX, y + padY));
+        }
     }
 
     private static readonly IPen SelectionOutline = new Pen(

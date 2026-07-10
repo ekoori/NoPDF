@@ -305,6 +305,7 @@ normal_bindings:
   "<end>": page last
   n: findnext
   N: findprev
+  f: hint                 # show link hints; type the label to follow
   H: tabprev
   L: tabnext
   gt: tabnext

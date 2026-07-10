@@ -185,6 +185,17 @@ public partial class MainWindow : Window
         // While editing annotation text, don't hijack keys.
         if (inText) return;
 
+        // Follow-links hint mode captures letters until a match / cancel.
+        if (Vm.SelectedTab?.IsHintMode == true)
+        {
+            if (e.Key == Key.Escape) { Vm.SelectedTab.ExitHintMode(); e.Handled = true; return; }
+            if (!ctrl && !alt && e.Key >= Key.A && e.Key <= Key.Z)
+                Vm.SelectedTab.FeedHintKey((char)('a' + (e.Key - Key.A)));
+            else
+                Vm.SelectedTab.ExitHintMode();
+            e.Handled = true; return;
+        }
+
         // Command-line / search triggers and Escape (no modifiers).
         if (!ctrl && !alt)
         {
