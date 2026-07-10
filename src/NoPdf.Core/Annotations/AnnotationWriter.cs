@@ -44,6 +44,7 @@ public static class AnnotationWriter
             switch (ann)
             {
                 case HighlightAnnotation h: AddHighlight(doc, page, h); break;
+                case ImageAnnotation im: AddImage(doc, page, im); break;
                 case SignatureAnnotation sig: AddSignature(doc, page, sig); break;
                 case CalloutAnnotation c: AddCallout(doc, page, c); break;
                 case FreeTextAnnotation f: AddFreeText(doc, page, f); break;
@@ -349,6 +350,31 @@ public static class AnnotationWriter
         var ap = new PdfDictionary(doc);
         ap.Elements["/N"] = form.Reference!;
         annot.Elements["/AP"] = ap;
+    }
+
+    // ---------------- Image ----------------
+
+    private static void AddImage(PdfDocument doc, PdfPage page, ImageAnnotation img)
+    {
+        if (img.ImageData.Length == 0) return;
+        PdfSharp.Drawing.XImage xi;
+        // Keep the backing stream alive (referenced by the XImage) until doc.Save().
+        try { xi = PdfSharp.Drawing.XImage.FromStream(new System.IO.MemoryStream(img.ImageData)); }
+        catch { return; }
+
+        using var gfx = PdfSharp.Drawing.XGraphics.FromPdfPage(page, PdfSharp.Drawing.XGraphicsPdfPageOptions.Append);
+        var rc = img.Rect;
+        double pageH = page.Height.Point;
+        // Model rect is PDF page space (origin bottom-left); XGraphics is top-left origin.
+        double x = rc.Left, y = pageH - rc.Top, w = rc.Width, h = rc.Height;
+        gfx.DrawImage(xi, x, y, w, h);
+        if (img.Border)
+        {
+            var pen = new PdfSharp.Drawing.XPen(
+                PdfSharp.Drawing.XColor.FromArgb(img.Color.R, img.Color.G, img.Color.B),
+                Math.Max(0.5, img.StrokeWidth));
+            gfx.DrawRectangle(pen, x, y, w, h);
+        }
     }
 
     // ---------------- Sticky note ----------------

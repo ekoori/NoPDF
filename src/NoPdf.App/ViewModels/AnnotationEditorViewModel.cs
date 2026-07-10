@@ -8,18 +8,21 @@ using NoPdf.Core.Annotations;
 namespace NoPdf.App.ViewModels;
 
 /// <summary>
-/// Editable wrapper over the currently-selected annotation, shown in the
-/// properties panel. Property changes mutate the model, redraw the overlay,
-/// mark the document dirty and (once per selection) push an undo snapshot.
+/// Editable wrapper over the current annotation selection, shown in the properties
+/// panel. Property changes mutate every selected annotation that supports them,
+/// redraw the overlay, mark the document dirty and (once per edit gesture) push an
+/// undo snapshot. Displayed values come from the primary (last-selected) annotation.
 /// </summary>
 public sealed partial class AnnotationEditorViewModel : ViewModelBase
 {
     private readonly DocumentViewModel _owner;
-    private readonly PageViewModel _page;
-    private readonly PdfAnnotationModel _ann;
+    private readonly IReadOnlyList<(PageViewModel page, PdfAnnotationModel ann)> _targets;
+    private readonly PdfAnnotationModel _primary;
     private bool _changed;
     private bool _loading;
 
+    public int Count => _targets.Count;
+    public bool MultiSelect => _targets.Count > 1;
     public string TypeName { get; }
     public bool HasStroke { get; }
     public bool HasWidth { get; }
@@ -29,6 +32,7 @@ public sealed partial class AnnotationEditorViewModel : ViewModelBase
     public bool HasOpacity { get; }
     public bool HasContents { get; }
     public bool HasSigner { get; }
+    public bool HasFrameToggle { get; }
     public string ContentsLabel { get; private set; } = "Note / text";
 
     [ObservableProperty] private string _strokeHex = "#000000";
@@ -40,6 +44,7 @@ public sealed partial class AnnotationEditorViewModel : ViewModelBase
     [ObservableProperty] private double _opacity = 1;
     [ObservableProperty] private string _contents = "";
     [ObservableProperty] private string _signerName = "";
+    [ObservableProperty] private bool _frameEnabled;
 
     public IReadOnlyList<string> Palette { get; } = new[]
     {
@@ -47,55 +52,69 @@ public sealed partial class AnnotationEditorViewModel : ViewModelBase
         "#8E24AA", "#00897B", "#000000", "#FFFFFF", "#9E9E9E",
     };
 
-    public AnnotationEditorViewModel(DocumentViewModel owner, PageViewModel page, PdfAnnotationModel ann)
+    public AnnotationEditorViewModel(
+        DocumentViewModel owner, IReadOnlyList<(PageViewModel page, PdfAnnotationModel ann)> targets)
     {
         _owner = owner;
-        _page = page;
-        _ann = ann;
+        _targets = targets;
+        _primary = targets[^1].ann;
         _loading = true;
 
-        TypeName = ann switch
-        {
-            HighlightAnnotation => "Highlight",
-            SquareAnnotation => "Rectangle",
-            LineAnnotation { Arrow: true } => "Arrow",
-            LineAnnotation => "Line",
-            PolylineAnnotation => "Polyline",
-            SignatureAnnotation => "Signature",
-            CalloutAnnotation => "Callout",
-            FreeTextAnnotation => "Text box",
-            StickyNoteAnnotation => "Sticky note",
-            _ => "Annotation",
-        };
+        var ann = _primary;
+        TypeName = MultiSelect
+            ? $"{targets.Count} annotations"
+            : ann switch
+            {
+                HighlightAnnotation => "Highlight",
+                SquareAnnotation => "Rectangle",
+                ImageAnnotation => "Image",
+                LineAnnotation { Arrow: true } => "Arrow",
+                LineAnnotation => "Line",
+                PolylineAnnotation => "Polyline",
+                SignatureAnnotation => "Signature",
+                CalloutAnnotation => "Callout",
+                FreeTextAnnotation => "Text box",
+                StickyNoteAnnotation => "Sticky note",
+                _ => "Annotation",
+            };
 
         StrokeHex = Hex(ann.Color);
         StrokeWidth = ann.StrokeWidth;
         Contents = ann.Contents ?? "";
 
-        switch (ann)
+        // Capability flags: union across the selection so a shared property is
+        // editable whenever any selected annotation supports it.
+        foreach (var (_, a) in targets)
         {
-            case HighlightAnnotation:
-                HasStroke = true; HasContents = true; break;
-            case SquareAnnotation s:
-                HasStroke = HasWidth = HasFill = HasContents = true;
-                FillEnabled = s.Interior is not null;
-                if (s.Interior is { } ic) FillHex = Hex(ic);
-                break;
-            case SignatureAnnotation sg:
-                HasStroke = HasWidth = HasOpacity = HasSigner = HasContents = true;
-                ContentsLabel = "Note (optional)";
-                SignerName = sg.SignerName;
-                Opacity = sg.BorderOpacity;
-                break;
-            case FreeTextAnnotation f: // also CalloutAnnotation
-                HasStroke = HasWidth = HasFont = HasTextColor = HasOpacity = HasContents = true;
-                FontSize = f.FontSize; Opacity = f.BorderOpacity; TextHex = Hex(f.TextColor);
-                break;
-            case LineAnnotation or PolylineAnnotation:
-                HasStroke = HasWidth = HasContents = true; break;
-            case StickyNoteAnnotation:
-                HasStroke = true; HasContents = true; break;
+            switch (a)
+            {
+                case HighlightAnnotation:
+                    HasStroke = HasContents = true; break;
+                case SquareAnnotation s:
+                    HasStroke = HasWidth = HasFill = HasContents = true;
+                    if (ReferenceEquals(a, ann)) { FillEnabled = s.Interior is not null; if (s.Interior is { } ic) FillHex = Hex(ic); }
+                    break;
+                case ImageAnnotation im:
+                    HasWidth = HasOpacity = HasStroke = HasFrameToggle = true;
+                    if (ReferenceEquals(a, ann)) { Opacity = im.Opacity; FrameEnabled = im.Border; }
+                    break;
+                case SignatureAnnotation sg:
+                    HasStroke = HasWidth = HasOpacity = HasSigner = HasContents = true;
+                    ContentsLabel = "Note (optional)";
+                    if (ReferenceEquals(a, ann)) { SignerName = sg.SignerName; Opacity = sg.BorderOpacity; }
+                    break;
+                case FreeTextAnnotation f: // also CalloutAnnotation
+                    HasStroke = HasWidth = HasFont = HasTextColor = HasOpacity = HasContents = true;
+                    if (ReferenceEquals(a, ann)) { FontSize = f.FontSize; Opacity = f.BorderOpacity; TextHex = Hex(f.TextColor); }
+                    break;
+                case LineAnnotation or PolylineAnnotation:
+                    HasStroke = HasWidth = HasContents = true; break;
+                case StickyNoteAnnotation:
+                    HasStroke = HasContents = true; break;
+            }
         }
+        // Contents only makes sense to edit for a single annotation.
+        if (MultiSelect) HasContents = HasSigner = false;
         _loading = false;
     }
 
@@ -104,31 +123,40 @@ public sealed partial class AnnotationEditorViewModel : ViewModelBase
     [RelayCommand] private void PickFill(string hex) { FillEnabled = true; FillHex = hex; }
 
     partial void OnSignerNameChanged(string value)
-        => Apply(() => { if (_ann is SignatureAnnotation s) s.SignerName = value; });
+        => Apply(a => { if (a is SignatureAnnotation s) s.SignerName = value; });
 
-    partial void OnStrokeHexChanged(string value) => Apply(() => _ann.Color = Parse(value, _ann.Color));
-    partial void OnStrokeWidthChanged(double value) => Apply(() => _ann.StrokeWidth = value);
-    partial void OnContentsChanged(string value) => Apply(() => _ann.Contents = value);
+    partial void OnStrokeHexChanged(string value) => Apply(a => a.Color = Parse(value, a.Color));
+    partial void OnStrokeWidthChanged(double value) => Apply(a => a.StrokeWidth = value);
+    partial void OnContentsChanged(string value) => Apply(a => a.Contents = value);
 
     partial void OnFontSizeChanged(double value)
-        => Apply(() => { if (_ann is FreeTextAnnotation f) f.FontSize = value; });
+        => Apply(a => { if (a is FreeTextAnnotation f) f.FontSize = value; });
     partial void OnOpacityChanged(double value)
-        => Apply(() => { if (_ann is FreeTextAnnotation f) f.BorderOpacity = value; });
+        => Apply(a =>
+        {
+            if (a is ImageAnnotation im) im.Opacity = value;
+            else if (a is FreeTextAnnotation f) f.BorderOpacity = value;
+        });
     partial void OnTextHexChanged(string value)
-        => Apply(() => { if (_ann is FreeTextAnnotation f) f.TextColor = Parse(value, f.TextColor); });
+        => Apply(a => { if (a is FreeTextAnnotation f) f.TextColor = Parse(value, f.TextColor); });
     partial void OnFillEnabledChanged(bool value) => ApplyFill();
     partial void OnFillHexChanged(string value) => ApplyFill();
+    partial void OnFrameEnabledChanged(bool value)
+        => Apply(a => { if (a is ImageAnnotation im) im.Border = value; });
 
     private void ApplyFill()
-        => Apply(() => { if (_ann is SquareAnnotation s) s.Interior = FillEnabled ? Parse(FillHex, AnnotColor.Yellow) : null; });
+        => Apply(a => { if (a is SquareAnnotation s) s.Interior = FillEnabled ? Parse(FillHex, AnnotColor.Yellow) : null; });
 
-    private void Apply(Action mutate)
+    private void Apply(Action<PdfAnnotationModel> mutate)
     {
         if (_loading) return;
         if (!_changed) { _owner.BeginChange(); _changed = true; }
-        mutate();
+        foreach (var (page, ann) in _targets)
+        {
+            mutate(ann);
+            page.NotifyAnnotationChanged();
+        }
         _owner.MarkDirty();
-        _page.NotifyAnnotationChanged();
     }
 
     private static string Hex(AnnotColor c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";

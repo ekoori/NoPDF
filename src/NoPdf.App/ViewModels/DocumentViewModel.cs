@@ -11,6 +11,7 @@ using NoPdf.App.Editing;
 using NoPdf.Core.Annotations;
 using NoPdf.Core.Editing;
 using NoPdf.Core.Rendering;
+using NoPdf.Core.Text;
 
 namespace NoPdf.App.ViewModels;
 
@@ -219,34 +220,176 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public bool HighlightActiveSelection(AnnotColor color) => _activeSelectionPage?.HighlightSelection(color) ?? false;
     public void ClearActiveSelection() => _activeSelectionPage?.ClearSelection();
 
-    public PdfAnnotationModel? SelectedAnnotation { get; private set; }
-    private PageViewModel? _selectedAnnotationPage;
+    private readonly List<PdfAnnotationModel> _selected = new();
+
+    /// <summary>All currently selected annotations (multi-select).</summary>
+    public IReadOnlyList<PdfAnnotationModel> SelectedAnnotations => _selected;
+
+    /// <summary>The primary (most recently added) selected annotation, or null.</summary>
+    public PdfAnnotationModel? SelectedAnnotation => _selected.Count > 0 ? _selected[^1] : null;
 
     [ObservableProperty] private AnnotationEditorViewModel? _annotationEditor;
 
+    /// <summary>The page a given annotation lives on.</summary>
+    public PageViewModel? PageOf(PdfAnnotationModel a)
+        => a.PageIndex >= 0 && a.PageIndex < Pages.Count ? Pages[a.PageIndex] : null;
+
+    public bool IsAnnotationSelected(PdfAnnotationModel a) => _selected.Contains(a);
+
+    /// <summary>All annotations grouped with <paramref name="a"/> (itself if ungrouped).</summary>
+    public IEnumerable<PdfAnnotationModel> GroupMembers(PdfAnnotationModel a)
+        => a.GroupId is { } g ? AllAnnotations().Where(x => x.GroupId == g) : new[] { a };
+
+    /// <summary>Single-select (clears any other selection). Selecting a grouped
+    /// annotation selects its whole group. Null clears the selection.</summary>
     public void SelectAnnotation(PageViewModel? page, PdfAnnotationModel? annotation)
     {
-        if (ReferenceEquals(SelectedAnnotation, annotation)) return;
-        var oldPage = _selectedAnnotationPage;
-        SelectedAnnotation = annotation;
-        _selectedAnnotationPage = annotation is null ? null : page;
-        AnnotationEditor = annotation is not null && page is not null
-            ? new AnnotationEditorViewModel(this, page, annotation) : null;
-        oldPage?.NotifyAnnotationChanged();
-        page?.NotifyAnnotationChanged();
+        _selected.Clear();
+        if (annotation is not null)
+            foreach (var a in GroupMembers(annotation))
+                if (!_selected.Contains(a)) _selected.Add(a);
+        RefreshSelection();
+    }
+
+    /// <summary>Adds or removes an annotation (and its group) from the selection.</summary>
+    public void ToggleSelection(PdfAnnotationModel annotation)
+    {
+        var members = GroupMembers(annotation).ToList();
+        if (members.Any(_selected.Contains))
+            foreach (var a in members) _selected.Remove(a);
+        else
+            foreach (var a in members) if (!_selected.Contains(a)) _selected.Add(a);
+        RefreshSelection();
+    }
+
+    private void RefreshSelection()
+    {
+        var targets = _selected
+            .Select(a => (page: PageOf(a), ann: a))
+            .Where(t => t.page is not null)
+            .Select(t => (t.page!, t.ann))
+            .ToList();
+        AnnotationEditor = targets.Count > 0 ? new AnnotationEditorViewModel(this, targets) : null;
+        // Redraw every page's overlay (cheap: only realized overlays have subscribers).
+        foreach (var p in Pages) p.NotifyAnnotationChanged();
     }
 
     public void DeleteSelectedAnnotation()
     {
-        if (SelectedAnnotation is null || _selectedAnnotationPage is null) return;
+        if (_selected.Count == 0) return;
         BeginChange();
-        var page = _selectedAnnotationPage;
-        var ann = SelectedAnnotation;
-        SelectAnnotation(null, null);
-        page.RemoveAnnotation(ann);
+        var toDelete = _selected.ToList();
+        _selected.Clear();
+        foreach (var a in toDelete) PageOf(a)?.RemoveAnnotation(a);
+        RefreshSelection();
     }
 
-    public bool IsAnnotationSelected(PdfAnnotationModel a) => ReferenceEquals(SelectedAnnotation, a);
+    // ----- Grouping -----
+
+    public void GroupSelected()
+    {
+        if (_selected.Count < 2) return;
+        BeginChange();
+        var g = Guid.NewGuid();
+        foreach (var a in _selected) a.GroupId = g;
+        MarkDirty();
+    }
+
+    public void UngroupSelected()
+    {
+        if (_selected.All(a => a.GroupId is null)) return;
+        BeginChange();
+        foreach (var a in _selected) a.GroupId = null;
+        MarkDirty();
+    }
+
+    // ----- Annotation clipboard (shared across tabs) -----
+
+    private static List<PdfAnnotationModel> _annClipboard = new();
+    public static bool HasCopiedAnnotations => _annClipboard.Count > 0;
+
+    public void CopySelectedAnnotations()
+    {
+        if (_selected.Count == 0) return;
+        _annClipboard = _selected.Select(a => a.Clone()).ToList();
+    }
+
+    /// <summary>Clones the current selection in place (same page/position) and selects the
+    /// clones, for a Ctrl-drag copy. The caller pushes the undo snapshot.</summary>
+    public IReadOnlyList<PdfAnnotationModel> DuplicateSelectionForDrag()
+    {
+        var groupMap = new Dictionary<Guid, Guid>();
+        var clones = new List<PdfAnnotationModel>();
+        foreach (var a in _selected)
+        {
+            var c = a.Clone();
+            if (c.GroupId is { } g)
+                c.GroupId = groupMap.TryGetValue(g, out var ng) ? ng : (groupMap[g] = Guid.NewGuid());
+            PageOf(c)?.Annotations.Add(c);
+            clones.Add(c);
+        }
+        foreach (var p in clones.Select(PageOf).Where(p => p is not null).Distinct()) p!.NotifyAnnotationChanged();
+        MarkDirty();
+        _selected.Clear();
+        _selected.AddRange(clones);
+        RefreshSelection();
+        return clones;
+    }
+
+    /// <summary>Adds a pasted raster image (PNG bytes) as an image annotation on the current page.</summary>
+    public void PasteImage(byte[] png, int pxW, int pxH)
+    {
+        int target = Math.Clamp(CurrentPage - 1, 0, Math.Max(0, PageCount - 1));
+        if (target >= Pages.Count || pxW <= 0 || pxH <= 0 || png.Length == 0) return;
+        BeginChange();
+        var pg = Pages[target];
+        double pw = pg.UnrotWidth, ph = pg.UnrotHeight;
+        double aspect = (double)pxW / pxH;
+        double w = pw * 0.5, h = w / aspect;
+        if (h > ph * 0.5) { h = ph * 0.5; w = h * aspect; }
+        double left = (pw - w) / 2, bottom = (ph - h) / 2;
+        var img = new ImageAnnotation
+        {
+            PageIndex = target,
+            Rect = new TextRect(left, bottom, left + w, bottom + h),
+            ImageData = png, PixelWidth = pxW, PixelHeight = pxH,
+            Opacity = 1.0, Border = false, Color = AnnotColor.Black, StrokeWidth = 1,
+        };
+        pg.Annotations.Add(img);
+        pg.NotifyAnnotationChanged();
+        MarkDirty();
+        _selected.Clear();
+        _selected.Add(img);
+        RefreshSelection();
+        GoToPage(target + 1);
+    }
+
+    /// <summary>Pastes clipboard annotations onto the current page, offset and selected.</summary>
+    public void PasteAnnotations()
+    {
+        if (_annClipboard.Count == 0) return;
+        int target = Math.Clamp(CurrentPage - 1, 0, Math.Max(0, PageCount - 1));
+        if (target >= Pages.Count) return;
+        BeginChange();
+        // Preserve grouping within the paste by remapping group ids.
+        var groupMap = new Dictionary<Guid, Guid>();
+        var clones = new List<PdfAnnotationModel>();
+        foreach (var src in _annClipboard)
+        {
+            var c = src.Clone();
+            c.PageIndex = target;
+            if (c.GroupId is { } g)
+                c.GroupId = groupMap.TryGetValue(g, out var ng) ? ng : (groupMap[g] = Guid.NewGuid());
+            AnnotationGeometry.Translate(c, 14, -14); // nudge so it's visibly offset
+            Pages[target].Annotations.Add(c);
+            clones.Add(c);
+        }
+        Pages[target].NotifyAnnotationChanged();
+        MarkDirty();
+        _selected.Clear();
+        _selected.AddRange(clones);
+        RefreshSelection();
+    }
 
     // ----- Find -----
 
@@ -286,13 +429,50 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
     public IEnumerable<PdfAnnotationModel> AllAnnotations() => Pages.SelectMany(p => p.Annotations);
 
+    /// <summary>Annotations prepared for writing: image opacity baked into the pixels
+    /// (PDF has no simple constant-alpha for images). Call on the UI thread.</summary>
+    private List<PdfAnnotationModel> AnnotationsForSave()
+    {
+        var list = new List<PdfAnnotationModel>();
+        foreach (var a in AllAnnotations())
+        {
+            if (a is ImageAnnotation img && img.Opacity < 0.999 && img.ImageData.Length > 0
+                && BakeOpacityPng(img.ImageData, img.Opacity) is { } baked)
+            {
+                var c = (ImageAnnotation)img.Clone();
+                c.ImageData = baked; c.Opacity = 1.0;
+                list.Add(c);
+            }
+            else list.Add(a);
+        }
+        return list;
+    }
+
+    private static byte[]? BakeOpacityPng(byte[] png, double opacity)
+    {
+        try
+        {
+            using var ms = new MemoryStream(png);
+            using var src = new Avalonia.Media.Imaging.Bitmap(ms);
+            var size = src.PixelSize;
+            var rtb = new Avalonia.Media.Imaging.RenderTargetBitmap(size);
+            using (var dc = rtb.CreateDrawingContext())
+            using (dc.PushOpacity(Math.Clamp(opacity, 0, 1)))
+                dc.DrawImage(src, new Avalonia.Rect(0, 0, size.Width, size.Height));
+            using var outMs = new MemoryStream();
+            rtb.Save(outMs);
+            return outMs.ToArray();
+        }
+        catch { return null; }
+    }
+
     /// <summary>Current document bytes with all annotations baked in (for signing).</summary>
-    public byte[] ExportWithAnnotations() => AnnotationWriter.SaveToBytes(_workingBytes, AllAnnotations().ToList());
+    public byte[] ExportWithAnnotations() => AnnotationWriter.SaveToBytes(_workingBytes, AnnotationsForSave());
 
     public Task SaveAsync(string? destPath = null)
     {
         string dest = destPath ?? FilePath;
-        var annots = AllAnnotations().Select(a => a).ToList();
+        var annots = AnnotationsForSave();
         var bytes = _workingBytes;
         return Task.Run(() =>
         {
@@ -374,7 +554,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         _workingBytes = cleaned;
         Document = newDoc;
         _undo.Clear(); _redo.Clear();
-        SelectedAnnotation = null; _selectedAnnotationPage = null; AnnotationEditor = null;
+        _selected.Clear(); AnnotationEditor = null;
         _activeSelectionPage = null; _findMatches.Clear(); _findIndex = -1;
 
         Pages.Clear(); Thumbnails.Clear(); Outline.Clear();
@@ -442,8 +622,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         _workingBytes = newBytes;
         Document = newDoc;
         _activeSelectionPage = null;
-        SelectedAnnotation = null;
-        _selectedAnnotationPage = null;
+        _selected.Clear();
         _findMatches.Clear();
         _findIndex = -1;
 
@@ -540,8 +719,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         foreach (var b in snap.UserBookmarks)
             UserBookmarks.Add(new BookmarkNode { Title = b.Title, PageIndex = b.PageIndex });
 
-        SelectedAnnotation = null;
-        _selectedAnnotationPage = null;
+        _selected.Clear();
         AnnotationEditor = null;
         MarkDirty();
     }

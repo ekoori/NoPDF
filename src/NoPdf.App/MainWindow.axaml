@@ -506,6 +506,10 @@
                                 </ItemsControl>
                             </StackPanel>
 
+                            <StackPanel Spacing="4" IsVisible="{Binding HasFrameToggle}">
+                                <CheckBox Content="Frame" IsChecked="{Binding FrameEnabled}" FontSize="12"/>
+                            </StackPanel>
+
                             <StackPanel Spacing="4" IsVisible="{Binding HasTextColor}">
                                 <TextBlock Classes="muted" Text="Text colour" FontSize="11"/>
                                 <TextBox Text="{Binding TextHex}" FontSize="12"/>
@@ -528,7 +532,7 @@
                             </StackPanel>
 
                             <StackPanel Spacing="2" IsVisible="{Binding HasOpacity}">
-                                <TextBlock Classes="muted" Text="Frame opacity" FontSize="11"/>
+                                <TextBlock Classes="muted" Text="Opacity" FontSize="11"/>
                                 <Slider Minimum="0" Maximum="1" Value="{Binding Opacity}"/>
                             </StackPanel>
 

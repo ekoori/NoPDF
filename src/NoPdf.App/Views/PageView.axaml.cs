@@ -23,6 +23,11 @@ public partial class PageView : UserControl
     private int _resizeId = -1;
     private bool _gestureChanged;
     private PdfAnnotationModel? _active;
+    // Multi-annotation move state.
+    private System.Collections.Generic.List<PdfAnnotationModel> _moving = new();
+    private PdfPoint _moveStart;
+    private double _appliedDx, _appliedDy;
+    private bool _copyOnMove, _copied;
     private PdfAnnotationModel? _editing;
     private string _editingOriginal = "";
 
@@ -200,11 +205,8 @@ public partial class PageView : UserControl
                 poly.Points[^1] = page;
                 _current.SetDraft(poly);
                 break;
-            case Mode.MoveAnn when _active is not null:
-                EnsureGestureUndo();
-                AnnotationGeometry.Translate(_active, page.X - _lastPage.X, page.Y - _lastPage.Y);
-                _lastPage = page;
-                TouchActive();
+            case Mode.MoveAnn when _moving.Count > 0:
+                MoveSelection(page, e.KeyModifiers.HasFlag(KeyModifiers.Shift));
                 break;
             case Mode.ResizeAnn when _active is not null:
                 EnsureGestureUndo();
@@ -233,6 +235,8 @@ public partial class PageView : UserControl
                 break;
             // DrawPoly is finished by double-click / Enter, not release.
             case Mode.MoveAnn:
+                _active = null; _moving.Clear();
+                break;
             case Mode.ResizeAnn:
                 _active = null;
                 break;
@@ -246,8 +250,12 @@ public partial class PageView : UserControl
 
     private void SelectPress(Point pos, PdfPoint page, PointerPressedEventArgs e)
     {
+        bool ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+
+        // Resize handles only apply to a single-annotation selection.
         var sel = Owner!.SelectedAnnotation;
-        if (sel is not null && _current!.Annotations.Contains(sel))
+        if (Owner.SelectedAnnotations.Count == 1 && sel is not null && _current!.Annotations.Contains(sel))
         {
             int id = HandleAt(sel, pos);
             if (id != int.MinValue)
@@ -260,14 +268,53 @@ public partial class PageView : UserControl
         var hit = _current!.HitTestAnnotation(page.X, page.Y, 5);
         if (hit is not null)
         {
-            Owner.SelectAnnotation(_current, hit);
+            // Shift-click toggles this annotation (and its group) in the selection.
+            if (shift) { Owner.ToggleSelection(hit); e.Handled = true; return; }
+            // Clicking an unselected annotation selects just it; clicking one that's
+            // already part of the selection keeps the whole selection (to move it).
+            if (!Owner.IsAnnotationSelected(hit)) Owner.SelectAnnotation(_current, hit);
             if (e.ClickCount == 2 && hit is FreeTextAnnotation ft) { OpenEditor(ft); return; }
-            _mode = Mode.MoveAnn; _active = hit; _lastPage = page; _gestureChanged = false;
+            BeginMove(page, copy: ctrl);
             e.Pointer.Capture(this); e.Handled = true; return;
         }
 
         Owner.SelectAnnotation(null, null);
         BeginTextSelect(page, e);
+    }
+
+    private void BeginMove(PdfPoint page, bool copy)
+    {
+        _mode = Mode.MoveAnn;
+        _moveStart = page;
+        _appliedDx = _appliedDy = 0;
+        _gestureChanged = false;
+        _copyOnMove = copy;
+        _copied = false;
+        _moving = new System.Collections.Generic.List<PdfAnnotationModel>(Owner!.SelectedAnnotations);
+    }
+
+    private void MoveSelection(PdfPoint page, bool constrain)
+    {
+        // On first movement of a Ctrl-drag, duplicate the selection and drag the copies.
+        if (_copyOnMove && !_copied)
+        {
+            EnsureGestureUndo();
+            _moving = new System.Collections.Generic.List<PdfAnnotationModel>(Owner!.DuplicateSelectionForDrag());
+            _copied = true;
+        }
+        else EnsureGestureUndo();
+
+        double dx = page.X - _moveStart.X, dy = page.Y - _moveStart.Y;
+        // Shift constrains to the dominant axis for precise horizontal/vertical moves.
+        if (constrain) { if (Math.Abs(dx) >= Math.Abs(dy)) dy = 0; else dx = 0; }
+
+        double ddx = dx - _appliedDx, ddy = dy - _appliedDy;
+        if (ddx != 0 || ddy != 0)
+            foreach (var a in _moving) AnnotationGeometry.Translate(a, ddx, ddy);
+        _appliedDx = dx; _appliedDy = dy;
+
+        Owner!.MarkDirty();
+        foreach (var a in _moving) Owner.PageOf(a)?.NotifyAnnotationChanged();
     }
 
     private void BeginTextSelect(PdfPoint page, PointerPressedEventArgs e)
@@ -381,6 +428,8 @@ public partial class PageView : UserControl
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
+        bool ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         switch (e.Key)
         {
             case Key.Delete or Key.Back when Owner?.SelectedAnnotation is not null:
@@ -391,7 +440,32 @@ public partial class PageView : UserControl
                 _current?.SetDraft(null); _mode = Mode.None; e.Handled = true; break;
             case Key.Escape when Owner?.SelectedAnnotation is not null:
                 Owner.SelectAnnotation(null, null); e.Handled = true; break;
+
+            // Annotation clipboard + grouping.
+            case Key.C when ctrl && Owner?.SelectedAnnotation is not null:
+                Owner.CopySelectedAnnotations(); e.Handled = true; break;
+            case Key.V when ctrl:
+                _ = PasteFromClipboard(); e.Handled = true; break;
+            case Key.G when ctrl && shift:
+                Owner?.UngroupSelected(); e.Handled = true; break;
+            case Key.G when ctrl:
+                Owner?.GroupSelected(); e.Handled = true; break;
         }
+    }
+
+    /// <summary>Ctrl+V: paste a clipboard image as an image annotation if present,
+    /// otherwise paste previously-copied annotation objects.</summary>
+    private async System.Threading.Tasks.Task PasteFromClipboard()
+    {
+        if (Owner is null) return;
+        var img = await ClipboardImage.TryReadAsync(TopLevel.GetTopLevel(this));
+        if (img is not null)
+        {
+            Owner.PasteImage(img.Value.png, img.Value.width, img.Value.height);
+            Owner.SelectTool(EditorTool.Select);
+            return;
+        }
+        if (DocumentViewModel.HasCopiedAnnotations) Owner.PasteAnnotations();
     }
 
     // ---------- inline text editing ----------

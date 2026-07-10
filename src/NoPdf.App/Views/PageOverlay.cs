@@ -55,12 +55,13 @@ public sealed class PageOverlay : Control
         foreach (var q in vm.SelectionRects)
             context.FillRectangle(SelectionBrush, ToDip(q));
 
-        var sel = vm.Owner.SelectedAnnotation;
-        if (sel is not null && vm.Annotations.Contains(sel))
-        {
-            DrawSelectionOutline(context, sel);
-            DrawHandles(context, sel);
-        }
+        var selset = vm.Owner.SelectedAnnotations;
+        foreach (var sel in selset)
+            if (vm.Annotations.Contains(sel))
+                DrawSelectionOutline(context, sel);
+        // Resize handles only make sense for a single-annotation selection.
+        if (selset.Count == 1 && vm.Annotations.Contains(selset[0]))
+            DrawHandles(context, selset[0]);
     }
 
     private static readonly IPen SelectionOutline = new Pen(
@@ -93,6 +94,11 @@ public sealed class PageOverlay : Control
                 IBrush? fill = s.Interior is { } ic
                     ? new SolidColorBrush(Color.FromRgb(ic.R, ic.G, ic.B)) : null;
                 ctx.DrawRectangle(fill, pen, rect);
+                break;
+            }
+            case ImageAnnotation img:
+            {
+                DrawImageAnnotation(ctx, img);
                 break;
             }
             case SignatureAnnotation sig:
@@ -191,6 +197,36 @@ public sealed class PageOverlay : Control
         double yy = top + 14 * s;
         if (!string.IsNullOrWhiteSpace(sig.Contents)) { Line(sig.Contents!, 10, Color.FromRgb(33, 33, 33), yy); yy += 15 * s; }
         Line("Signed " + sig.Signed.ToString("yyyy-MM-dd HH:mm"), 8, Color.FromRgb(110, 110, 110), yy);
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ImageAnnotation, Avalonia.Media.Imaging.Bitmap> _imgCache = new();
+
+    private static Avalonia.Media.Imaging.Bitmap? BitmapFor(ImageAnnotation img)
+    {
+        if (_imgCache.TryGetValue(img, out var cached)) return cached;
+        if (img.ImageData.Length == 0) return null;
+        try
+        {
+            using var ms = new System.IO.MemoryStream(img.ImageData);
+            var bmp = new Avalonia.Media.Imaging.Bitmap(ms);
+            _imgCache.Add(img, bmp);
+            return bmp;
+        }
+        catch { return null; }
+    }
+
+    private void DrawImageAnnotation(DrawingContext ctx, ImageAnnotation img)
+    {
+        var rect = ToDip(img.Rect);
+        var bmp = BitmapFor(img);
+        if (bmp is not null)
+            using (ctx.PushOpacity(Math.Clamp(img.Opacity, 0, 1)))
+                ctx.DrawImage(bmp, new Rect(bmp.Size), rect);
+        if (img.Border)
+        {
+            var color = Color.FromRgb(img.Color.R, img.Color.G, img.Color.B);
+            ctx.DrawRectangle(null, new Pen(new SolidColorBrush(color), Math.Max(1, img.StrokeWidth * _scale)), rect);
+        }
     }
 
     private void DrawText(DrawingContext ctx, FreeTextAnnotation f, Rect rect)

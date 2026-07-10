@@ -27,6 +27,10 @@ public abstract class PdfAnnotationModel
     public string? Author { get; set; }
     public string? Contents { get; set; }
 
+    /// <summary>App-level grouping id: annotations sharing a value select/move together.
+    /// In-memory only (not persisted to the PDF).</summary>
+    public System.Guid? GroupId { get; set; }
+
     /// <summary>Axis-aligned bounds in page space, used for hit-testing and selection.</summary>
     public abstract TextRect Bounds { get; }
 
@@ -40,6 +44,7 @@ public abstract class PdfAnnotationModel
         c.StrokeWidth = StrokeWidth;
         c.Author = Author;
         c.Contents = Contents;
+        c.GroupId = GroupId;
     }
 }
 
@@ -198,6 +203,33 @@ public sealed class SignatureAnnotation : FreeTextAnnotation
             Certify = Certify, CertPath = CertPath, CertPassword = CertPassword, Certified = Certified,
         };
         CopyFreeTextTo(c);
+        return c;
+    }
+}
+
+/// <summary>A raster image stamp (e.g. a pasted screenshot), with an optional frame
+/// and adjustable opacity. <see cref="Color"/>/<see cref="PdfAnnotationModel.StrokeWidth"/> style the frame.</summary>
+public sealed class ImageAnnotation : PdfAnnotationModel
+{
+    public TextRect Rect { get; set; }
+    /// <summary>Encoded image bytes (PNG).</summary>
+    public byte[] ImageData { get; set; } = System.Array.Empty<byte>();
+    public int PixelWidth { get; set; }
+    public int PixelHeight { get; set; }
+    /// <summary>Image opacity, 0 (transparent) .. 1 (opaque).</summary>
+    public double Opacity { get; set; } = 1.0;
+    /// <summary>Draw a frame around the image.</summary>
+    public bool Border { get; set; }
+    public override TextRect Bounds => Rect;
+
+    public override PdfAnnotationModel Clone()
+    {
+        var c = new ImageAnnotation
+        {
+            Rect = Rect, ImageData = ImageData, PixelWidth = PixelWidth, PixelHeight = PixelHeight,
+            Opacity = Opacity, Border = Border,
+        };
+        CopyBaseTo(c);
         return c;
     }
 }

@@ -39,6 +39,9 @@ public static class AnnotationGeometry
             case FreeTextAnnotation f:
                 AddRectHandles(list, f.Rect);
                 break;
+            case ImageAnnotation im:
+                AddRectHandles(list, im.Rect);
+                break;
             case HighlightAnnotation:
                 break; // not resizable
         }
@@ -105,6 +108,9 @@ public static class AnnotationGeometry
             case FreeTextAnnotation f:
                 f.Rect = Offset(f.Rect, dx, dy);
                 break;
+            case ImageAnnotation im:
+                im.Rect = Offset(im.Rect, dx, dy);
+                break;
             case HighlightAnnotation h:
                 for (int i = 0; i < h.Quads.Count; i++) { }
                 // Highlights are anchored to text; not translated.
@@ -132,6 +138,9 @@ public static class AnnotationGeometry
                 break;
             case FreeTextAnnotation f:
                 f.Rect = ResizeRect(f.Rect, id, p);
+                break;
+            case ImageAnnotation im:
+                im.Rect = ResizeRect(im.Rect, id, p);
                 break;
         }
     }
