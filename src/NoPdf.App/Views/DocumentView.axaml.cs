@@ -190,7 +190,7 @@ public partial class DocumentView : UserControl
         // Base cursor per tool; PageView refines it while hovering a page.
         Cursor = _vm?.CurrentTool switch
         {
-            EditorTool.Hand => new Cursor(StandardCursorType.Hand),
+            EditorTool.Hand => PanCursors.Open,
             EditorTool.Zoom => new Cursor(StandardCursorType.Cross),
             _ => Cursor.Default,
         };
@@ -212,6 +212,7 @@ public partial class DocumentView : UserControl
         _panStartPointer = e.GetPosition(this);
         _panStartOffset = sv.Offset;
         e.Pointer.Capture(PageList);
+        Cursor = PanCursors.Grab; // closed hand while dragging
         e.Handled = true;
     }
 
@@ -231,6 +232,7 @@ public partial class DocumentView : UserControl
         if (!_panning) return;
         _panning = false;
         e.Pointer.Capture(null);
+        UpdateCursor(); // back to the open hand (or tool default)
         e.Handled = true;
     }
 

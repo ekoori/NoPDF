@@ -20,6 +20,7 @@ public partial class PageView : UserControl
     private bool _dragged;
     private PdfPoint _startPage;
     private int _resizeId = -1;
+    private TextRect _resizeRect;
     private bool _gestureChanged;
     private PdfAnnotationModel? _active;
     // Multi-annotation move state.
@@ -209,7 +210,10 @@ public partial class PageView : UserControl
                 break;
             case Mode.ResizeAnn when _active is not null:
                 EnsureGestureUndo();
-                AnnotationGeometry.MoveHandle(_active, _resizeId, page);
+                var target = page;
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && IsRectCorner(_active, _resizeId))
+                    target = ConstrainAspect(_resizeRect, _resizeId, page);
+                AnnotationGeometry.MoveHandle(_active, _resizeId, target);
                 TouchActive();
                 break;
         }
@@ -259,7 +263,7 @@ public partial class PageView : UserControl
             int id = HandleAt(sel, pos);
             if (id != int.MinValue)
             {
-                _mode = Mode.ResizeAnn; _active = sel; _resizeId = id; _gestureChanged = false;
+                _mode = Mode.ResizeAnn; _active = sel; _resizeId = id; _resizeRect = sel.Bounds; _gestureChanged = false;
                 e.Pointer.Capture(this); e.Handled = true; return;
             }
         }
@@ -544,6 +548,29 @@ public partial class PageView : UserControl
     }
 
     // ---------- geometry helpers ----------
+
+    // Corner handles (0=BL,2=BR,4=TR,6=TL) of rectangle-based annotations.
+    private static bool IsRectCorner(PdfAnnotationModel a, int id)
+        => (id == 0 || id == 2 || id == 4 || id == 6)
+           && a is SquareAnnotation or FreeTextAnnotation or ImageAnnotation;
+
+    /// <summary>Constrains a corner drag to keep the start rect's aspect ratio.</summary>
+    private static PdfPoint ConstrainAspect(TextRect start, int id, PdfPoint p)
+    {
+        double w0 = start.Width, h0 = start.Height;
+        if (w0 < 1e-6 || h0 < 1e-6) return p;
+        var (fx, fy) = id switch
+        {
+            0 => (start.Right, start.Top),     // fixed = top-right
+            2 => (start.Left, start.Top),      // fixed = top-left
+            4 => (start.Left, start.Bottom),   // fixed = bottom-left
+            _ => (start.Right, start.Bottom),  // id 6: fixed = bottom-right
+        };
+        double dx = p.X - fx, dy = p.Y - fy;
+        double scale = Math.Max(Math.Abs(dx) / w0, Math.Abs(dy) / h0);
+        double sx = dx < 0 ? -1 : 1, sy = dy < 0 ? -1 : 1;
+        return new PdfPoint(fx + sx * w0 * scale, fy + sy * h0 * scale);
+    }
 
     private int HandleAt(PdfAnnotationModel sel, Point pos)
     {

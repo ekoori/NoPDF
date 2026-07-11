@@ -357,6 +357,16 @@ public partial class MainWindow : Window
         return files.Select(f => f.TryGetLocalPath()).FirstOrDefault(p => !string.IsNullOrEmpty(p));
     }
 
+    private void OnTabPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.GetCurrentPoint(null).Properties.IsMiddleButtonPressed
+            && (sender as Control)?.DataContext is DocumentViewModel doc)
+        {
+            Vm.CloseTabCommand.Execute(doc);
+            e.Handled = true;
+        }
+    }
+
     private async Task<string?> PickCertAsync()
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
