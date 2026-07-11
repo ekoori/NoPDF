@@ -330,11 +330,14 @@ public partial class MainWindow : Window
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Open PDF",
+            Title = "Open document",
             AllowMultiple = true,
             FileTypeFilter = new[]
             {
+                new FilePickerFileType("Documents") { Patterns = new[] { "*.pdf", "*.cbz", "*.cbr", "*.cb7", "*.cbt", "*.djvu", "*.djv" } },
                 new FilePickerFileType("PDF documents") { Patterns = new[] { "*.pdf" } },
+                new FilePickerFileType("Comic archives") { Patterns = new[] { "*.cbz", "*.cbr", "*.cb7", "*.cbt" } },
+                new FilePickerFileType("DjVu") { Patterns = new[] { "*.djvu", "*.djv" } },
                 FilePickerFileTypes.All,
             },
         });

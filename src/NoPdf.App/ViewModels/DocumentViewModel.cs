@@ -113,7 +113,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public static Task<DocumentViewModel> LoadAsync(string filePath)
         => Task.Run(() =>
         {
-            var fileBytes = File.ReadAllBytes(filePath);
+            var fileBytes = NoPdf.Core.Import.DocumentImport.ReadAsPdfBytes(filePath);
             var (cleaned, models) = AnnotationReader.LoadAndStrip(fileBytes);
             var doc = PdfDocument.OpenBytes(cleaned, filePath);
             var outline = doc.GetOutline();
@@ -722,7 +722,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public void ReloadFromDisk()
     {
         if (!File.Exists(FilePath)) return;
-        var (cleaned, models) = AnnotationReader.LoadAndStrip(File.ReadAllBytes(FilePath));
+        var (cleaned, models) = AnnotationReader.LoadAndStrip(NoPdf.Core.Import.DocumentImport.ReadAsPdfBytes(FilePath));
         var oldDoc = Document;
         var newDoc = PdfDocument.OpenBytes(cleaned, FilePath);
         _workingBytes = cleaned;
