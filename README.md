@@ -8,7 +8,8 @@ toolbars and dialogs.
 
 Rendering uses Google's **PDFium**; page manipulation and annotation writing use
 **PDFsharp**. Annotations are saved as standard PDF objects, so they open in
-Acrobat and every other viewer.
+Acrobat and every other viewer. Besides PDF, noPDF opens **CBZ/CBR/CB7/CBT**
+comic archives and **DjVu** documents (converted to PDF on load).
 
 ## Features
 
@@ -94,11 +95,13 @@ authenticated once with `gh auth login`.
 | **Sessions** | `session save\|load\|del\|list <name>` |
 | **Navigate** | `page <n\|first\|last\|next\|prev>`, `scrollup`/`scrolldown`/`scrollleft`/`scrollright`, `scrollpageup`/`scrollpagedown` |
 | **Zoom** | `zoom <pct\|in\|out\|reset\|width\|page>`, `fit`, `fitwidth` |
+| **View** | `view scroll [X]` (continuous, X pages across), `view book [X]` (X-page spread) |
 | **Find** | `find <text>`, `findnext` (`n`), `findprev` (`N`) |
 | **Tools** | `hand`, `select`, `highlight`, `note`, `textbox`, `callout`, `line`, `rect`, `arrow`, `polyline`, `signature` (`sign`) |
 | **Edit** | `undo`, `redo`, `copy`, `delannot`, `yank`/`paste` (annotations), `group`/`ungroup` |
 | **Signatures** | `sign [alias]` (place, optionally selecting a preset), `signatures` (panel), `siglist` (list) |
 | **Links** | `hint` / `follow` (`f`) — label every on-screen link, type the label to follow it |
+| **Panels** | `annots` (annotations list), `props` (properties), `toc`, `pages` |
 | **Pages** | `rotate <range> [cw\|ccw\|180]`, `delete <range>`, `insert <path> [at]`, `merge <path>`, `extract <range> [path]` |
 | **Panels / UI** | `toc`, `pages`, `props`, `toolbar` |
 | **Marks** | `m`/`go <name>` (file quickmarks), `marks` (picker), `bookmark`/`bmdel <name>` (page bookmarks) |
@@ -115,13 +118,16 @@ authenticated once with `gh auth login`.
 
 ### Mouse & editing
 
-Ctrl+wheel zooms around the cursor; the middle mouse button pans. With the
-**Select** tool: shift-click adds annotations to the selection (edit colour /
-width / font / opacity for all at once in the properties panel), drag moves the
-whole selection, **Shift** constrains to one axis, **Ctrl+drag** duplicates.
-`Ctrl+C`/`Ctrl+V` copy & paste annotations; `Ctrl+G` / `Ctrl+Shift+G` group /
-ungroup. `Ctrl+V` also pastes a **screenshot** from the clipboard as a resizable
-image (with an optional frame and adjustable opacity).
+Ctrl+wheel zooms around the cursor; the middle mouse button pans (grab-hand
+cursor). Middle-click a tab to close it. **Select** is the default tool: click or
+shift-click annotations to build a selection, or marquee on empty space (drag
+**down** to select fully-enclosed objects, **up** to select touched ones). Edit
+colour / width / font / opacity for the whole selection at once in the properties
+panel; drag moves it together, **Shift** constrains to one axis (or keeps aspect
+ratio while resizing), **Ctrl+drag** duplicates. `Ctrl+C`/`Ctrl+V` copy & paste
+annotations; `Ctrl+G` / `Ctrl+Shift+G` group / ungroup (groups nest). `Ctrl+V`
+also pastes a **screenshot** from the clipboard as a resizable image (optional
+frame, adjustable opacity).
 
 ## Configuration
 

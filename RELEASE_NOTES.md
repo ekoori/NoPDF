@@ -7,6 +7,19 @@ and publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
 ## Unreleased (0.0.2 line)
 
+Formats & view:
+- Open **CBZ/CBR/CB7/CBT** comic archives and **DjVu** documents (converted to PDF on
+  load; DjVu needs DjVuLibre's `ddjvu` on PATH).
+- **Parallel / book view**: `:view scroll [X]` (continuous, X across) and
+  `:view book [X]` (X-page spread fit to the window).
+- **Annotations panel** (`:annots`) listing every annotation; click to jump to it.
+
+Editing & selection:
+- **Select** is the default tool; marquee-select on empty space (drag down = enclose,
+  drag up = touch). Middle-click a tab to close it.
+- Nested grouping (group a group; ungroup peels one level). Shift-resize keeps aspect
+  ratio. Grab-hand cursor while panning.
+
 Editor & navigation:
 - Multi-select annotations (shift-click); edit colour/width/font/opacity for the
   whole selection at once.
