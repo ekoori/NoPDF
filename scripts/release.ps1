@@ -68,7 +68,11 @@ elseif ($Publish) {
     $buildNo = 0
     Set-Prefix $prefix; Set-BuildNo $buildNo
 }
-# else: local build uses the current prefix + build number as-is.
+else {
+    # Local (non-debug) build for the user: raise YY once.
+    $buildNo = $buildNo + 1
+    Set-BuildNo $buildNo
+}
 
 $ver = "$prefix-beta." + ('{0:00}' -f $buildNo)
 $verTag = "v$ver"
@@ -88,10 +92,10 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 foreach ($t in $targets) {
     $rid = $t.rid
     Write-Host "  publishing $rid ..." -ForegroundColor Yellow
-    # Release config does not increment YY, so every platform shares this version.
+    # RevSuppress: YY was set above, so all platforms share this one version.
     dotnet publish $proj -c Release -r $rid --self-contained true `
         -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
-        -p:DebugType=none -p:DebugSymbols=false 2>&1 | Out-Null
+        -p:DebugType=none -p:DebugSymbols=false -p:RevSuppress=true 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $rid" }
 
     $src = Join-Path $root "src\NoPdf.App\bin\Release\net10.0\$rid\publish\NoPdf.App$($t.ext)"
@@ -99,6 +103,9 @@ foreach ($t in $targets) {
     Copy-Item $src $dst -Force
     $mb = [math]::Round((Get-Item $dst).Length / 1MB)
     Write-Host "    -> $dst ($mb MB)" -ForegroundColor Green
+
+    # Keep a stable-named copy of the Windows x64 build for quick launching.
+    if ($rid -eq 'win-x64') { Copy-Item $src (Join-Path $outDir 'NoPdf.App.exe') -Force }
 }
 
 Write-Host "`nArtifacts written to $outDir" -ForegroundColor Cyan
