@@ -35,7 +35,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public ObservableCollection<BookmarkNode> UserBookmarks { get; } = new();
     public bool HasOutline => Outline.Count > 0;
 
-    [ObservableProperty] private EditorTool _currentTool = EditorTool.Hand;
+    [ObservableProperty] private EditorTool _currentTool = EditorTool.Select;
     [ObservableProperty] private bool _isDirty;
     [ObservableProperty] private bool _isActive; // is this the selected tab
 
@@ -236,9 +236,13 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
     public bool IsAnnotationSelected(PdfAnnotationModel a) => _selected.Contains(a);
 
-    /// <summary>All annotations grouped with <paramref name="a"/> (itself if ungrouped).</summary>
+    /// <summary>All annotations in <paramref name="a"/>'s outermost group (itself if ungrouped).</summary>
     public IEnumerable<PdfAnnotationModel> GroupMembers(PdfAnnotationModel a)
-        => a.GroupId is { } g ? AllAnnotations().Where(x => x.GroupId == g) : new[] { a };
+    {
+        if (a.GroupPath.Count == 0) return new[] { a };
+        var outer = a.GroupPath[^1];
+        return AllAnnotations().Where(x => x.GroupPath.Count > 0 && x.GroupPath[^1] == outer);
+    }
 
     /// <summary>Single-select (clears any other selection). Selecting a grouped
     /// annotation selects its whole group. Null clears the selection.</summary>
@@ -247,6 +251,16 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         _selected.Clear();
         if (annotation is not null)
             foreach (var a in GroupMembers(annotation))
+                if (!_selected.Contains(a)) _selected.Add(a);
+        RefreshSelection();
+    }
+
+    /// <summary>Selects a set of annotations at once (each expanded to its group).</summary>
+    public void SelectAnnotations(IEnumerable<PdfAnnotationModel> annotations)
+    {
+        _selected.Clear();
+        foreach (var ann in annotations)
+            foreach (var a in GroupMembers(ann))
                 if (!_selected.Contains(a)) _selected.Add(a);
         RefreshSelection();
     }
@@ -291,15 +305,17 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         if (_selected.Count < 2) return;
         BeginChange();
         var g = Guid.NewGuid();
-        foreach (var a in _selected) a.GroupId = g;
+        foreach (var a in _selected) a.GroupPath.Add(g); // new outermost level
         MarkDirty();
     }
 
+    /// <summary>Peels the outermost group level off the selection (leaving inner groups).</summary>
     public void UngroupSelected()
     {
-        if (_selected.All(a => a.GroupId is null)) return;
+        if (_selected.All(a => a.GroupPath.Count == 0)) return;
         BeginChange();
-        foreach (var a in _selected) a.GroupId = null;
+        foreach (var a in _selected)
+            if (a.GroupPath.Count > 0) a.GroupPath.RemoveAt(a.GroupPath.Count - 1);
         MarkDirty();
     }
 
@@ -323,8 +339,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         foreach (var a in _selected)
         {
             var c = a.Clone();
-            if (c.GroupId is { } g)
-                c.GroupId = groupMap.TryGetValue(g, out var ng) ? ng : (groupMap[g] = Guid.NewGuid());
+            RemapGroups(c, groupMap);
             PageOf(c)?.Annotations.Add(c);
             clones.Add(c);
         }
@@ -378,8 +393,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         {
             var c = src.Clone();
             c.PageIndex = target;
-            if (c.GroupId is { } g)
-                c.GroupId = groupMap.TryGetValue(g, out var ng) ? ng : (groupMap[g] = Guid.NewGuid());
+            RemapGroups(c, groupMap);
             AnnotationGeometry.Translate(c, 14, -14); // nudge so it's visibly offset
             Pages[target].Annotations.Add(c);
             clones.Add(c);
@@ -501,6 +515,16 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     }
 
     private void NotifyAllPages() { foreach (var p in Pages) p.NotifyAnnotationChanged(); }
+
+    /// <summary>Remaps a clone's group ids to fresh ones (kept consistent within one paste/duplicate).</summary>
+    private static void RemapGroups(PdfAnnotationModel c, Dictionary<Guid, Guid> map)
+    {
+        for (int i = 0; i < c.GroupPath.Count; i++)
+        {
+            var g = c.GroupPath[i];
+            c.GroupPath[i] = map.TryGetValue(g, out var ng) ? ng : (map[g] = Guid.NewGuid());
+        }
+    }
 
     private static List<string> HintLabels(int n)
     {

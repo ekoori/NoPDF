@@ -64,6 +64,10 @@ public sealed partial class PageViewModel : ViewModelBase
     /// <summary>In-progress annotation being drawn (not yet committed).</summary>
     public PdfAnnotationModel? Draft { get; private set; }
 
+    /// <summary>In-progress marquee (rubber-band) selection rect in page space, or null.</summary>
+    public TextRect? MarqueeRect { get; private set; }
+    public void SetMarquee(TextRect? rect) { MarqueeRect = rect; OverlayInvalidated?.Invoke(); }
+
     /// <summary>Raised when overlay-drawn content (selection/highlights) changes.</summary>
     public event Action? OverlayInvalidated;
 

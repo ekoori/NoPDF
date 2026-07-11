@@ -63,6 +63,13 @@ public sealed class PageOverlay : Control
         if (selset.Count == 1 && vm.Annotations.Contains(selset[0]))
             DrawHandles(context, selset[0]);
 
+        if (vm.MarqueeRect is { } mq)
+        {
+            var r = ToDip(mq);
+            context.FillRectangle(SelectionBrush, r);
+            context.DrawRectangle(null, SelectionOutline, r);
+        }
+
         if (vm.Owner.IsHintMode)
         {
             string pfx = vm.Owner.HintPrefix;

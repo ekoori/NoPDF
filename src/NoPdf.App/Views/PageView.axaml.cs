@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -13,7 +14,7 @@ namespace NoPdf.App.Views;
 
 public partial class PageView : UserControl
 {
-    private enum Mode { None, TextSelect, DrawDrag, DrawPoly, MoveAnn, ResizeAnn }
+    private enum Mode { None, TextSelect, DrawDrag, DrawPoly, MoveAnn, ResizeAnn, Marquee }
 
     private PageViewModel? _current;
     private Mode _mode;
@@ -208,6 +209,10 @@ public partial class PageView : UserControl
             case Mode.MoveAnn when _moving.Count > 0:
                 MoveSelection(page, e.KeyModifiers.HasFlag(KeyModifiers.Shift));
                 break;
+            case Mode.Marquee:
+                _dragged = true;
+                _current.SetMarquee(RectFrom(_startPage, page));
+                break;
             case Mode.ResizeAnn when _active is not null:
                 EnsureGestureUndo();
                 var target = page;
@@ -242,6 +247,9 @@ public partial class PageView : UserControl
                 break;
             case Mode.ResizeAnn:
                 _active = null;
+                break;
+            case Mode.Marquee:
+                FinishMarquee(ToPage(AreaPos(e)));
                 break;
         }
 
@@ -282,7 +290,15 @@ public partial class PageView : UserControl
         }
 
         Owner.SelectAnnotation(null, null);
-        BeginTextSelect(page, e);
+        // Over text → select text; over empty space → marquee-select annotations.
+        if (_current.IsOverText(page.X, page.Y))
+            BeginTextSelect(page, e);
+        else
+        {
+            _mode = Mode.Marquee; _startPage = page; _dragged = false;
+            _current.SetMarquee(new TextRect(page.X, page.Y, page.X, page.Y));
+            e.Pointer.Capture(this); e.Handled = true;
+        }
     }
 
     private void BeginMove(PdfPoint page, bool copy)
@@ -319,6 +335,28 @@ public partial class PageView : UserControl
         Owner!.MarkDirty();
         foreach (var a in _moving) Owner.PageOf(a)?.NotifyAnnotationChanged();
     }
+
+    private void FinishMarquee(PdfPoint end)
+    {
+        if (_current is null) return;
+        var rect = RectFrom(_startPage, end);
+        _current.SetMarquee(null);
+        if (!_dragged) { Owner?.SelectAnnotation(null, null); return; }
+        // Dragging downward selects fully-enclosed annotations; upward selects touched ones.
+        bool enclose = end.Y <= _startPage.Y;
+        var hits = _current.Annotations
+            .Where(a => enclose ? RectContains(rect, a.Bounds) : RectIntersects(rect, a.Bounds))
+            .ToList();
+        if (hits.Count > 0) Owner!.SelectAnnotations(hits);
+        else Owner!.SelectAnnotation(null, null);
+    }
+
+    private static bool RectContains(TextRect outer, TextRect inner)
+        => inner.Left >= outer.Left && inner.Right <= outer.Right
+           && inner.Bottom >= outer.Bottom && inner.Top <= outer.Top;
+
+    private static bool RectIntersects(TextRect a, TextRect b)
+        => a.Left <= b.Right && a.Right >= b.Left && a.Bottom <= b.Top && a.Top >= b.Bottom;
 
     private void BeginTextSelect(PdfPoint page, PointerPressedEventArgs e)
     {

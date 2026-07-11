@@ -27,9 +27,10 @@ public abstract class PdfAnnotationModel
     public string? Author { get; set; }
     public string? Contents { get; set; }
 
-    /// <summary>App-level grouping id: annotations sharing a value select/move together.
-    /// In-memory only (not persisted to the PDF).</summary>
-    public System.Guid? GroupId { get; set; }
+    /// <summary>App-level nested grouping, innermost first / outermost last. Annotations
+    /// sharing an outermost id select and move together; grouping appends a new id,
+    /// ungrouping pops the outermost. In-memory only (not persisted to the PDF).</summary>
+    public System.Collections.Generic.List<System.Guid> GroupPath { get; set; } = new();
 
     /// <summary>Axis-aligned bounds in page space, used for hit-testing and selection.</summary>
     public abstract TextRect Bounds { get; }
@@ -44,7 +45,7 @@ public abstract class PdfAnnotationModel
         c.StrokeWidth = StrokeWidth;
         c.Author = Author;
         c.Contents = Contents;
-        c.GroupId = GroupId;
+        c.GroupPath = new System.Collections.Generic.List<System.Guid>(GroupPath);
     }
 }
 
