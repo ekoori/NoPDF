@@ -73,6 +73,8 @@ public sealed class CommandRegistry
             ["siglist"] = (_, _) => Msg(ListSignatures()),
             ["props"] = (_, _) => { _main.ToggleAnnotationPanelCommand.Execute(null); return Msg(_main.IsAnnotationPanelOpen ? "Annotation panel shown" : "Annotation panel hidden"); },
             ["annot"] = (_, _) => { _main.ToggleAnnotationPanelCommand.Execute(null); return Msg(null); },
+            ["annots"] = (_, _) => { _main.ToggleAnnotationListPanelCommand.Execute(null); return Msg(null); },
+            ["annotations"] = (_, _) => { _main.ToggleAnnotationListPanelCommand.Execute(null); return Msg(null); },
             ["rotate"] = Rotate,
             ["delete"] = Delete, ["del"] = Delete,
             ["extract"] = Extract,

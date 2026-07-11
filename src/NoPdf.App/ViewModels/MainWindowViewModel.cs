@@ -510,6 +510,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void ToggleAnnotationPanel() => IsAnnotationPanelOpen = !IsAnnotationPanelOpen;
 
+    [ObservableProperty] private bool _isAnnotationListPanelOpen;
+
+    [RelayCommand]
+    private void ToggleAnnotationListPanel()
+    {
+        IsAnnotationListPanelOpen = !IsAnnotationListPanelOpen;
+        if (IsAnnotationListPanelOpen) SelectedTab?.RefreshAnnotationList();
+    }
+
     /// <summary>Undo: annotation/page/bookmark edit if available, else reopen a closed tab.</summary>
     [RelayCommand]
     public void Undo()

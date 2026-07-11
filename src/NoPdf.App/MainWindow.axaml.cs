@@ -367,6 +367,12 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnAnnotationItemClick(object? sender, PointerPressedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is AnnotationListItem item)
+            Vm.SelectedTab?.SelectAnnotationItemCommand.Execute(item);
+    }
+
     private async Task<string?> PickCertAsync()
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions

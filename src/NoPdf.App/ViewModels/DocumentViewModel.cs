@@ -33,6 +33,9 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public ObservableCollection<PageThumbnail> Thumbnails { get; } = new();
     public ObservableCollection<BookmarkNode> Outline { get; } = new();
     public ObservableCollection<BookmarkNode> UserBookmarks { get; } = new();
+
+    /// <summary>Flat list of every annotation in the document, for the annotations panel.</summary>
+    public ObservableCollection<AnnotationListItem> AnnotationList { get; } = new();
     public bool HasOutline => Outline.Count > 0;
 
     [ObservableProperty] private EditorTool _currentTool = EditorTool.Select;
@@ -286,6 +289,24 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         AnnotationEditor = targets.Count > 0 ? new AnnotationEditorViewModel(this, targets) : null;
         // Redraw every page's overlay (cheap: only realized overlays have subscribers).
         foreach (var p in Pages) p.NotifyAnnotationChanged();
+        RefreshAnnotationList();
+    }
+
+    /// <summary>Rebuilds the flat annotation list (call when annotations are added/removed).</summary>
+    public void RefreshAnnotationList()
+    {
+        AnnotationList.Clear();
+        foreach (var p in Pages)
+            foreach (var a in p.Annotations)
+                AnnotationList.Add(new AnnotationListItem(a, p.PageNumber, _selected.Contains(a)));
+    }
+
+    [RelayCommand]
+    private void SelectAnnotationItem(AnnotationListItem? item)
+    {
+        if (item is null) return;
+        SelectAnnotation(PageOf(item.Model), item.Model);
+        GoToPage(item.PageNumber);
     }
 
     public void DeleteSelectedAnnotation()

@@ -311,7 +311,7 @@
         </Border>
 
         <!-- ===== Main area ===== -->
-        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
+        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
 
             <!-- Left tabs panel -->
             <Border Grid.Column="0" Classes="sidepanel" Width="190" Background="{DynamicResource ChromeBackground}"
@@ -624,6 +624,32 @@
                                        Text="Select the Signature tool (or :sign alias) and drag on a page. Type the reason into the stamp; a certified signature prompts to save a signed copy when you finish."/>
                         </StackPanel>
                     </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <!-- Annotations list panel -->
+            <Border Grid.Column="6" Classes="sidepanel" Width="248"
+                    Background="{DynamicResource PanelBackground}"
+                    BorderBrush="{DynamicResource PanelBorder}" BorderThickness="1,0,0,0"
+                    IsVisible="{Binding IsAnnotationListPanelOpen}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Classes="muted" Text="ANNOTATIONS"
+                               FontSize="11" FontWeight="SemiBold" Margin="12,10,12,6"/>
+                    <ListBox ItemsSource="{Binding SelectedTab.AnnotationList}" Background="Transparent"
+                             SelectionMode="Single" Margin="4,0,4,8">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AnnotationListItem">
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,1"
+                                      Background="Transparent"
+                                      PointerPressed="OnAnnotationItemClick">
+                                    <TextBlock Grid.Column="0" Text="{Binding Display}" FontSize="12"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding PageLabel}" Classes="muted"
+                                               FontSize="11" Margin="6,0,0,0"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                 </DockPanel>
             </Border>
         </Grid>
