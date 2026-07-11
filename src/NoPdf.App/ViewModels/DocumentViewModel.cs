@@ -185,6 +185,42 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public void RequestFitWidth() => FitWidthRequested?.Invoke();
     public void RequestFitPage() => FitPageRequested?.Invoke();
 
+    // ----- View mode: N pages per row (scroll / book) -----
+
+    /// <summary>Number of pages shown side by side per row (1 = single column).</summary>
+    [ObservableProperty] private int _pagesPerRow = 1;
+    /// <summary>Book mode fits a whole row (spread) into the window; scroll is continuous.</summary>
+    [ObservableProperty] private bool _bookMode;
+
+    /// <summary>Raised when the view mode changes so the view can relayout + refit.</summary>
+    public event Action? ViewModeChanged;
+
+    public string SetView(string mode, int? count)
+    {
+        bool book = mode.Equals("book", StringComparison.OrdinalIgnoreCase);
+        int n = count ?? (book ? 2 : 1);
+        n = Math.Clamp(n, 1, 8);
+        BookMode = book;
+        PagesPerRow = n;
+        ViewModeChanged?.Invoke();
+        return book ? $"Book view, {n} page(s) across" : (n > 1 ? $"Scroll view, {n} across" : "Scroll view");
+    }
+
+    /// <summary>Zoom so <paramref name="n"/> pages fit across the viewport (book mode also fits height).</summary>
+    public void FitAcross(double viewportWidth, double viewportHeight, int n)
+    {
+        var page = Pages.Count >= CurrentPage && CurrentPage >= 1 ? Pages[CurrentPage - 1] : Pages.FirstOrDefault();
+        if (page is null) return;
+        double padding = 48, gap = 10 * (n - 1);
+        double zw = (viewportWidth - padding - gap) / (n * page.PointWidth * DipsPerPoint);
+        double z = BookMode
+            ? Math.Min(zw, (viewportHeight - padding) / (page.PointHeight * DipsPerPoint))
+            : zw;
+        int keep = CurrentPage;
+        SetZoom(z);
+        ScrollToPageRequested?.Invoke(Math.Clamp(keep - 1, 0, Math.Max(0, PageCount - 1)));
+    }
+
     // ----- Navigation -----
 
     public int CurrentPage { get; private set; } = 1;

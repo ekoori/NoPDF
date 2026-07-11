@@ -86,6 +86,7 @@ public sealed class CommandRegistry
             ["reload"] = (_, _) => { Doc?.ReloadFromDisk(); return Msg(Doc is null ? "No document" : "Reloaded from disk"); },
             ["fit"] = (_, _) => Task.FromResult(Fit(false)),
             ["fitwidth"] = (_, _) => Task.FromResult(Fit(true)),
+            ["view"] = View,
             ["copy"] = (_, _) => { _main.RequestCopy(); return Msg(null); },
             ["copypath"] = (_, _) =>
             {
@@ -221,6 +222,18 @@ public sealed class CommandRegistry
         };
         if (target < 1) return Msg($"Invalid page: {args[0]}");
         return Msg(doc.GoToPage(target) ? null : $"Page out of range (1-{doc.Pages.Count})");
+    }
+
+    private Task<string?> View(string[] args, string rest)
+    {
+        var doc = Doc;
+        if (doc is null) return Msg("No document");
+        string mode = args.Length > 0 ? args[0].ToLowerInvariant() : "scroll";
+        int? count = null;
+        if (args.Length > 1 && int.TryParse(args[1], out int n)) count = n;
+        else if (args.Length == 1 && int.TryParse(args[0], out int n2)) { mode = "scroll"; count = n2; }
+        if (mode != "scroll" && mode != "book") return Msg("Usage: view <scroll|book> [pages]");
+        return Msg(doc.SetView(mode, count));
     }
 
     private Task<string?> Zoom(string[] args, string rest)

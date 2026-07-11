@@ -92,6 +92,7 @@ public partial class DocumentView : UserControl
             _vm.FitPageRequested -= OnFitPage;
             _vm.ScrollByRequested -= OnScrollBy;
             _vm.ScrollPageRequested -= OnScrollPage;
+            _vm.ViewModeChanged -= OnViewModeChanged;
         }
         _vm = DataContext as DocumentViewModel;
         if (_vm is not null)
@@ -102,6 +103,7 @@ public partial class DocumentView : UserControl
             _vm.FitPageRequested += OnFitPage;
             _vm.ScrollByRequested += OnScrollBy;
             _vm.ScrollPageRequested += OnScrollPage;
+            _vm.ViewModeChanged += OnViewModeChanged;
             ApplyDpi();
         }
         UpdateCursor();
@@ -145,6 +147,25 @@ public partial class DocumentView : UserControl
     {
         var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0;
         _vm?.SetDpiScale(scaling);
+    }
+
+    private static readonly Avalonia.Controls.Templates.FuncTemplate<Panel?> WrapPanelTemplate =
+        new(() => new WrapPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center });
+    private static readonly Avalonia.Controls.Templates.FuncTemplate<Panel?> StackPanelTemplate =
+        new(() => new VirtualizingStackPanel());
+
+    private void OnViewModeChanged()
+    {
+        if (_vm is null) return;
+        // Multiple pages per row need a wrapping panel; single column stays virtualized.
+        PageList.ItemsPanel = _vm.PagesPerRow > 1 ? WrapPanelTemplate : StackPanelTemplate;
+        Dispatcher.UIThread.Post(() =>
+        {
+            var sv = Scroll;
+            if (sv is null || _vm is null) return;
+            var vp = sv.Viewport;
+            if (vp.Width > 0 && vp.Height > 0) _vm.FitAcross(vp.Width, vp.Height, _vm.PagesPerRow);
+        }, DispatcherPriority.Background);
     }
 
     private void OnFitWidth() => Dispatcher.UIThread.Post(() => Fit(true));
