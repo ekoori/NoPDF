@@ -103,7 +103,7 @@ authenticated once with `gh auth login`.
 | **Links** | `hint` / `follow` (`f`) — label every on-screen link, type the label to follow it |
 | **Panels** | `annots` (annotations list), `props` (properties), `toc`, `pages` |
 | **Pages** | `rotate <range> [cw\|ccw\|180]`, `delete <range>`, `insert <path> [at]`, `merge <path>`, `extract <range> [path]` |
-| **Panels / UI** | `toc`, `pages`, `props`, `toolbar` |
+| **Panels / UI** | `toc`, `pages`, `props`, `annots`, `toolbar`, `tabspanel [top\|bottom\|left\|right] [n]` (no args = toggle) |
 | **Marks** | `m`/`go <name>` (file quickmarks), `marks` (picker), `bookmark`/`bmdel <name>` (page bookmarks) |
 | **Config** | `config` (open config file), `bind <key> <command>` (or `bind :w save` for an alias) |
 | **Misc** | `print [range]`, `save [path]`, `saveas [path]`, `help` |

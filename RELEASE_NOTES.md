@@ -7,11 +7,26 @@ and publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
 ## Unreleased (0.0.2 line)
 
+Tabs, help & bookmarks:
+- Opening a file that's already open focuses its tab instead of duplicating it
+  (paths are normalised; drag-drop / OS-launch / command all agree).
+- `:showtabs` is now **`:tabspanel`** — no args toggles it; position it `top`,
+  `bottom`, `left` or `right` of the view. `title_buttons_in_tabs` (default off)
+  makes the min/close buttons ride with the panel.
+- **`:help` opens a real help document in a tab** (commands, hotkeys, aliases).
+- **`:bookmark` now writes into the PDF's outline**, so bookmarks are saved in the
+  file and show up in other viewers; the never-persisted "My bookmarks" list is gone.
+- Status bar always shows **page / pages**; the pages panel has a button to jump to
+  the page shown in the view.
+- A binding like `o: ":open"` pre-fills the command line instead of running it.
+- Clicking an annotation in the annotations panel focuses that annotation.
+- In view mode the cursor becomes a finger over links and a click follows them.
+
 Formats & view:
 - Open **CBZ/CBR/CB7/CBT** comic archives and **DjVu** documents (converted to PDF on
   load; DjVu needs DjVuLibre's `ddjvu` on PATH).
-- **Parallel / book view**: `:view scroll [X]` (continuous, X across) and
-  `:view book [X]` (X-page spread fit to the window).
+- **View modes**: `:view scroll [X]` (vertical scroll, X across), `:view full [X]`
+  (X whole pages fill the viewport) and `:view scrollh [X]` (horizontal scroll, X rows).
 - **Annotations panel** (`:annots`) listing every annotation; click to jump to it.
 
 Editing & selection:
