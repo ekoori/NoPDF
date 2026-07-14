@@ -357,26 +357,8 @@
                                 </TreeView.ItemTemplate>
                             </TreeView>
 
-                            <TextBlock Classes="muted" Text="No outline in this PDF" FontSize="11"
+                            <TextBlock Classes="muted" Text="No bookmarks in this document" FontSize="11"
                                        Margin="10,8" IsVisible="{Binding !SelectedTab.HasOutline}"/>
-
-                            <TextBlock Classes="muted" Text="MY BOOKMARKS" FontSize="11" FontWeight="SemiBold"
-                                       Margin="8,14,8,4"
-                                       IsVisible="{Binding SelectedTab.UserBookmarks.Count}"/>
-                            <ListBox x:Name="UserBookmarksList"
-                                     ItemsSource="{Binding SelectedTab.UserBookmarks}"
-                                     SelectionChanged="OnUserBookmarkSelected"
-                                     Background="Transparent">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:BookmarkNode">
-                                        <Grid ColumnDefinitions="*,Auto">
-                                            <TextBlock Text="{Binding Title}" FontSize="12" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Grid.Column="1" Classes="muted" Text="{Binding PageLabel}"
-                                                       FontSize="11" Margin="6,0,0,0"/>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
                         </StackPanel>
                     </ScrollViewer>
                 </DockPanel>

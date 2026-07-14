@@ -103,9 +103,6 @@ public partial class MainWindow : Window
     private void OnOutlineSelected(object? sender, SelectionChangedEventArgs e)
         => NavigateToBookmark(e);
 
-    private void OnUserBookmarkSelected(object? sender, SelectionChangedEventArgs e)
-        => NavigateToBookmark(e);
-
     private void NavigateToBookmark(SelectionChangedEventArgs e)
     {
         if (e.AddedItems.Count > 0 && e.AddedItems[0] is BookmarkNode node && node.PageIndex >= 0)

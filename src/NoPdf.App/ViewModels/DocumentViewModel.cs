@@ -31,8 +31,8 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
     public ObservableCollection<PageViewModel> Pages { get; } = new();
     public ObservableCollection<PageThumbnail> Thumbnails { get; } = new();
+    /// <summary>The document's bookmarks, read from (and saved into) the PDF outline.</summary>
     public ObservableCollection<BookmarkNode> Outline { get; } = new();
-    public ObservableCollection<BookmarkNode> UserBookmarks { get; } = new();
 
     /// <summary>Flat list of every annotation in the document, for the annotations panel.</summary>
     public ObservableCollection<AnnotationListItem> AnnotationList { get; } = new();
@@ -133,20 +133,20 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>Adds a bookmark to the PDF's own outline, so saving persists it in the file.</summary>
     public void AddUserBookmark(string name)
     {
         BeginChange();
-        UserBookmarks.Add(new BookmarkNode { Title = name, PageIndex = CurrentPage - 1 });
-        MarkDirty();
+        var nb = PageOps.AddOutlineEntry(_workingBytes, name, CurrentPage - 1);
+        Rebuild(nb, Enumerable.Range(0, PageCount).ToList());
     }
 
     public bool RemoveUserBookmark(string name)
     {
-        var node = UserBookmarks.FirstOrDefault(b => string.Equals(b.Title, name, StringComparison.OrdinalIgnoreCase));
-        if (node is null) return false;
+        var nb = PageOps.RemoveOutlineEntry(_workingBytes, name);
+        if (ReferenceEquals(nb, _workingBytes)) return false; // no such bookmark
         BeginChange();
-        UserBookmarks.Remove(node);
-        MarkDirty();
+        Rebuild(nb, Enumerable.Range(0, PageCount).ToList());
         return true;
     }
 
@@ -866,18 +866,33 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
             Thumbnails.Add(new PageThumbnail(this, newIdx, newDoc.GetPageSize(newIdx)));
         }
 
+        // The outline lives in the file, so re-read it after any structural change.
+        RefreshOutline();
+
         oldDoc?.Dispose();
         MarkDirty();
         OnPropertyChanged(nameof(PageCount)); OnPropertyChanged(nameof(PageLabel));
         CurrentPage = Math.Clamp(CurrentPage, 1, Math.Max(1, PageCount));
     }
 
+    private void RefreshOutline()
+    {
+        Outline.Clear();
+        try
+        {
+            foreach (var item in Document?.GetOutline() ?? Array.Empty<OutlineItem>())
+                Outline.Add(BookmarkNode.FromOutline(item));
+        }
+        catch { }
+        OnPropertyChanged(nameof(HasOutline));
+    }
+
     // ----- Undo / redo (snapshot-based) -----
 
+    // Bookmarks live in the PDF bytes, so Bytes covers them.
     private sealed record Snapshot(
         byte[] Bytes,
-        List<List<PdfAnnotationModel>> AnnotsPerPage,
-        List<BookmarkNode> UserBookmarks);
+        List<List<PdfAnnotationModel>> AnnotsPerPage);
 
     private readonly Stack<Snapshot> _undo = new();
     private readonly Stack<Snapshot> _redo = new();
@@ -887,8 +902,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     private Snapshot Capture()
         => new(
             _workingBytes,
-            Pages.Select(p => p.Annotations.Select(a => a.Clone()).ToList()).ToList(),
-            UserBookmarks.Select(b => new BookmarkNode { Title = b.Title, PageIndex = b.PageIndex }).ToList());
+            Pages.Select(p => p.Annotations.Select(a => a.Clone()).ToList()).ToList());
 
     /// <summary>Call immediately before a mutating operation to make it undoable.</summary>
     public void BeginChange()
@@ -931,6 +945,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
                 Thumbnails.Add(new PageThumbnail(this, i, newDoc.GetPageSize(i)));
             }
             oldDoc?.Dispose();
+            RefreshOutline(); // bookmarks live in the bytes
             OnPropertyChanged(nameof(PageCount)); OnPropertyChanged(nameof(PageLabel));
         }
         else
@@ -943,9 +958,6 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
                 Pages[i].NotifyAnnotationChanged();
             }
         }
-        UserBookmarks.Clear();
-        foreach (var b in snap.UserBookmarks)
-            UserBookmarks.Add(new BookmarkNode { Title = b.Title, PageIndex = b.PageIndex });
 
         _selected.Clear();
         AnnotationEditor = null;

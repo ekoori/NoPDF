@@ -13,6 +13,34 @@ namespace NoPdf.Core.Editing;
 /// </summary>
 public static class PageOps
 {
+    /// <summary>Appends a top-level outline (bookmark) entry pointing at a page.</summary>
+    public static byte[] AddOutlineEntry(byte[] source, string title, int pageIndex)
+    {
+        using var input = new MemoryStream(source);
+        using var doc = PdfReader.Open(input, PdfDocumentOpenMode.Modify);
+        if (pageIndex < 0 || pageIndex >= doc.PageCount) return source;
+        doc.Outlines.Add(title, doc.Pages[pageIndex], true);
+        using var output = new MemoryStream();
+        doc.Save(output, closeStream: false);
+        return output.ToArray();
+    }
+
+    /// <summary>Removes the first top-level outline entry with this title. Returns the
+    /// source unchanged when there is no match.</summary>
+    public static byte[] RemoveOutlineEntry(byte[] source, string title)
+    {
+        using var input = new MemoryStream(source);
+        using var doc = PdfReader.Open(input, PdfDocumentOpenMode.Modify);
+        PdfSharp.Pdf.PdfOutline? match = null;
+        foreach (var o in doc.Outlines)
+            if (string.Equals(o.Title, title, StringComparison.OrdinalIgnoreCase)) { match = o; break; }
+        if (match is null) return source;
+        doc.Outlines.Remove(match);
+        using var output = new MemoryStream();
+        doc.Save(output, closeStream: false);
+        return output.ToArray();
+    }
+
     /// <summary>Builds a new PDF from the given zero-based page indices, in order.</summary>
     public static byte[] Compose(byte[] source, IReadOnlyList<int> pageOrder)
     {
