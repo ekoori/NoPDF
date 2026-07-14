@@ -131,6 +131,11 @@ frame, adjustable opacity).
 
 ## Configuration
 
+Sessions restore lazily — a restored tab only reads its file when you first open
+it. Unsaved edits are cached to `%APPDATA%/NoPdf/autosave` every
+`autosave_minutes` (default 5, `0` = only on exit) and recovered on the next
+start, still linked to the original file so saving writes back to it.
+
 On first run noPDF writes `%APPDATA%/NoPdf/config.yaml` (a documented default
 listing every command). It hot-reloads on save. It controls the theme, whether
 the toolbar / title bar are shown, the signer name, text-box defaults, and all

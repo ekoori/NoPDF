@@ -7,6 +7,13 @@ and publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
 ## Unreleased (0.0.2 line)
 
+Session & recovery:
+- **Autosave**: unsaved edits are cached to `%AppData%/NoPdf/autosave` every
+  `autosave_minutes` (default 5, 0 = off) and on exit, then recovered on the next
+  start — still linked to the original file, so saving writes back to it.
+- **Lazy tabs**: restoring a session no longer reads every file up front; a tab
+  loads the first time you open it.
+
 Tabs, help & bookmarks:
 - Opening a file that's already open focuses its tab instead of duplicating it
   (paths are normalised; drag-drop / OS-launch / command all agree).
