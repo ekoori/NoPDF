@@ -95,7 +95,7 @@ authenticated once with `gh auth login`.
 | **Sessions** | `session save\|load\|del\|list <name>` |
 | **Navigate** | `page <n\|first\|last\|next\|prev>`, `scrollup`/`scrolldown`/`scrollleft`/`scrollright`, `scrollpageup`/`scrollpagedown` |
 | **Zoom** | `zoom <pct\|in\|out\|reset\|width\|page>`, `fit`, `fitwidth` |
-| **View** | `view scroll [X]` (continuous, X pages across), `view book [X]` (X-page spread) |
+| **View** | `view scroll [X]` (vertical scroll, X across), `view full [X]` (X whole pages fill the viewport), `view scrollh [X]` (horizontal scroll, X rows) |
 | **Find** | `find <text>`, `findnext` (`n`), `findprev` (`N`) |
 | **Tools** | `hand`, `select`, `highlight`, `note`, `textbox`, `callout`, `line`, `rect`, `arrow`, `polyline`, `signature` (`sign`) |
 | **Edit** | `undo`, `redo`, `copy`, `delannot`, `yank`/`paste` (annotations), `group`/`ungroup` |

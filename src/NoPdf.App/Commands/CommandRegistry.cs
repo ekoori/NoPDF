@@ -232,7 +232,8 @@ public sealed class CommandRegistry
         int? count = null;
         if (args.Length > 1 && int.TryParse(args[1], out int n)) count = n;
         else if (args.Length == 1 && int.TryParse(args[0], out int n2)) { mode = "scroll"; count = n2; }
-        if (mode != "scroll" && mode != "book") return Msg("Usage: view <scroll|book> [pages]");
+        if (mode is not ("scroll" or "full" or "scrollh" or "book"))
+            return Msg("Usage: view <scroll|full|scrollh> [pages]");
         return Msg(doc.SetView(mode, count));
     }
 

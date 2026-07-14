@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -149,22 +150,45 @@ public partial class DocumentView : UserControl
         _vm?.SetDpiScale(scaling);
     }
 
-    private static readonly Avalonia.Controls.Templates.FuncTemplate<Panel?> WrapPanelTemplate =
+    private static readonly Avalonia.Controls.Templates.FuncTemplate<Panel?> WrapHTemplate =
         new(() => new WrapPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center });
+    private static readonly Avalonia.Controls.Templates.FuncTemplate<Panel?> WrapVTemplate =
+        new(() => new WrapPanel { Orientation = Avalonia.Layout.Orientation.Vertical, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
     private static readonly Avalonia.Controls.Templates.FuncTemplate<Panel?> StackPanelTemplate =
         new(() => new VirtualizingStackPanel());
 
     private void OnViewModeChanged()
     {
         if (_vm is null) return;
-        // Multiple pages per row need a wrapping panel; single column stays virtualized.
-        PageList.ItemsPanel = _vm.PagesPerRow > 1 ? WrapPanelTemplate : StackPanelTemplate;
+        int n = _vm.PagesPerRow;
+        switch (_vm.ViewMode)
+        {
+            case PageViewMode.ScrollH:
+                // Pages fill a column top-to-bottom then wrap rightwards: scroll horizontally.
+                PageList.ItemsPanel = WrapVTemplate;
+                ScrollViewer.SetVerticalScrollBarVisibility(PageList, ScrollBarVisibility.Disabled);
+                ScrollViewer.SetHorizontalScrollBarVisibility(PageList, ScrollBarVisibility.Auto);
+                break;
+            case PageViewMode.Full:
+            case PageViewMode.Scroll when n > 1:
+                // Horizontal scrolling must be OFF or the wrap panel gets infinite width
+                // and lays every page out in one endless row instead of wrapping.
+                PageList.ItemsPanel = WrapHTemplate;
+                ScrollViewer.SetHorizontalScrollBarVisibility(PageList, ScrollBarVisibility.Disabled);
+                ScrollViewer.SetVerticalScrollBarVisibility(PageList, ScrollBarVisibility.Auto);
+                break;
+            default:
+                PageList.ItemsPanel = StackPanelTemplate;
+                ScrollViewer.SetHorizontalScrollBarVisibility(PageList, ScrollBarVisibility.Auto);
+                ScrollViewer.SetVerticalScrollBarVisibility(PageList, ScrollBarVisibility.Auto);
+                break;
+        }
         Dispatcher.UIThread.Post(() =>
         {
             var sv = Scroll;
             if (sv is null || _vm is null) return;
             var vp = sv.Viewport;
-            if (vp.Width > 0 && vp.Height > 0) _vm.FitAcross(vp.Width, vp.Height, _vm.PagesPerRow);
+            if (vp.Width > 0 && vp.Height > 0) _vm.FitForView(vp.Width, vp.Height);
         }, DispatcherPriority.Background);
     }
 
