@@ -98,27 +98,54 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public void ScrollBy(double dx, double dy) => ScrollByRequested?.Invoke(dx, dy);
     public void ScrollPage(int dir) => ScrollPageRequested?.Invoke(dir);
 
-    private DocumentViewModel(PdfDocument document, string filePath, byte[] workingBytes,
-        IReadOnlyList<OutlineItem> outline, List<PdfAnnotationModel> annotations)
+    private DocumentViewModel(string filePath)
     {
-        Document = document;
         FilePath = filePath;
         Title = Path.GetFileName(filePath);
-        _workingBytes = workingBytes;
-        BuildPages(annotations);
-        foreach (var item in outline)
-            Outline.Add(BookmarkNode.FromOutline(item));
+        _workingBytes = Array.Empty<byte>();
     }
 
-    public static Task<DocumentViewModel> LoadAsync(string filePath)
-        => Task.Run(() =>
+    /// <summary>A tab that has not read its file yet — the content loads on first display.</summary>
+    public static DocumentViewModel CreateDeferred(string filePath) => new(filePath);
+
+    public static async Task<DocumentViewModel> LoadAsync(string filePath)
+    {
+        var vm = new DocumentViewModel(filePath);
+        await vm.EnsureLoadedAsync();
+        return vm;
+    }
+
+    /// <summary>False until the file has actually been read (deferred/restored tabs).</summary>
+    public bool IsLoaded => Document is not null;
+
+    /// <summary>Unsaved bytes to restore instead of reading the file (crash recovery).</summary>
+    public byte[]? RecoverBytes { get; set; }
+
+    /// <summary>Reads the file (or the recovered bytes) and builds the pages. Idempotent.</summary>
+    public async Task EnsureLoadedAsync()
+    {
+        if (IsLoaded) return;
+        var recover = RecoverBytes;
+        string path = FilePath;
+        var (doc, cleaned, outline, models) = await Task.Run(() =>
         {
-            var fileBytes = NoPdf.Core.Import.DocumentImport.ReadAsPdfBytes(filePath);
-            var (cleaned, models) = AnnotationReader.LoadAndStrip(fileBytes);
-            var doc = PdfDocument.OpenBytes(cleaned, filePath);
-            var outline = doc.GetOutline();
-            return new DocumentViewModel(doc, filePath, cleaned, outline, models);
+            var fileBytes = recover ?? NoPdf.Core.Import.DocumentImport.ReadAsPdfBytes(path);
+            var (c, m) = AnnotationReader.LoadAndStrip(fileBytes);
+            var d = PdfDocument.OpenBytes(c, path);
+            return (d, c, d.GetOutline(), m);
         });
+
+        Document = doc;
+        _workingBytes = cleaned;
+        BuildPages(models);
+        foreach (var item in outline)
+            Outline.Add(BookmarkNode.FromOutline(item));
+
+        OnPropertyChanged(nameof(PageCount));
+        OnPropertyChanged(nameof(PageLabel));
+        OnPropertyChanged(nameof(HasOutline));
+        if (recover is not null) { RecoverBytes = null; IsDirty = true; } // recovered edits are unsaved
+    }
 
     private void BuildPages(List<PdfAnnotationModel> annotations)
     {
@@ -252,8 +279,8 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         }
     }
 
-    /// <summary>"page / pages", shown in the status bar.</summary>
-    public string PageLabel => $"{CurrentPage} / {PageCount}";
+    /// <summary>"page / pages", shown in the status bar (blank until the file is read).</summary>
+    public string PageLabel => IsLoaded ? $"{CurrentPage} / {PageCount}" : "";
 
     public bool GoToPage(int oneBased)
     {

@@ -61,6 +61,34 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool ShowChromeButtons => IsTitlebarHidden && !TitleButtonsInTabs;
     public bool ShowTabsButtons => IsTitlebarHidden && TitleButtonsInTabs;
 
+    // ----- Autosave (unsaved edits cached to temp) -----
+    private readonly AutosaveStore _autosave = new();
+    private Avalonia.Threading.DispatcherTimer? _autosaveTimer;
+
+    private void StartAutosaveTimer()
+    {
+        _autosaveTimer?.Stop();
+        int minutes = Config.AutosaveMinutes;
+        if (minutes <= 0) return; // 0 disables periodic autosave
+        _autosaveTimer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMinutes(minutes) };
+        _autosaveTimer.Tick += (_, _) => AutosaveNow();
+        _autosaveTimer.Start();
+    }
+
+    /// <summary>Caches every loaded tab that has unsaved edits. Called on the timer and on exit.</summary>
+    public void AutosaveNow()
+    {
+        foreach (var t in Tabs.ToList())
+        {
+            if (!t.IsLoaded || !t.IsDirty) continue;
+            try { _autosave.Save(t.FilePath, t.ExportWithAnnotations()); }
+            catch { /* never let autosave break the app */ }
+        }
+    }
+
+    /// <summary>Drops a file's cached edits (it now matches what's on disk).</summary>
+    public void ClearAutosave(string path) => _autosave.Remove(path);
+
     // ----- Signature presets -----
     [ObservableProperty] private bool _isSignaturePanelOpen;
     [ObservableProperty] private SignaturePreset? _selectedSignaturePreset;
@@ -369,6 +397,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ApplyTabsConfig();
         LoadSignaturePresets();
         RefreshRecent();
+        StartAutosaveTimer();
         if (cfgError is not null) StatusText = cfgError;
 
         _configWatcher = new ConfigWatcher(AppConfig.ConfigPath, ReloadConfig);
@@ -399,7 +428,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasRecent));
     }
 
-    public void RequestQuit() => QuitRequested?.Invoke();
+    public void RequestQuit()
+    {
+        AutosaveNow(); // never lose unsaved edits on exit
+        QuitRequested?.Invoke();
+    }
 
     partial void OnSelectedTabChanged(DocumentViewModel? oldValue, DocumentViewModel? newValue)
     {
@@ -407,6 +440,22 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (newValue is not null) newValue.IsActive = true;
         SaveSession();
         PeekLeftTabs();
+        if (newValue is { IsLoaded: false }) _ = LoadDeferredAsync(newValue);
+    }
+
+    /// <summary>Loads a restored tab's file the first time it's shown.</summary>
+    private async Task LoadDeferredAsync(DocumentViewModel doc)
+    {
+        StatusText = $"Opening {doc.Title}…";
+        try
+        {
+            bool recovered = doc.RecoverBytes is not null;
+            await doc.EnsureLoadedAsync();
+            StatusText = recovered
+                ? $"Recovered unsaved changes to {doc.Title} — save to write them back"
+                : $"Opened {doc.Title} ({doc.Pages.Count} pages)";
+        }
+        catch (Exception ex) { StatusText = $"Failed to open {doc.Title}: {ex.Message}"; }
     }
 
     private void SaveSession()
@@ -443,12 +492,23 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 foreach (var t in Tabs.ToList()) t.Dispose();
                 Tabs.Clear();
             }
+            // Restored tabs are deferred: nothing is read from disk until the tab is shown.
             foreach (var f in data.Files)
-                if (File.Exists(f)) await OpenPathAsync(f, forceNewTab: true);
+            {
+                if (!File.Exists(f)) continue;
+                string path;
+                try { path = Path.GetFullPath(f); } catch { path = f; }
+                if (Tabs.Any(t => string.Equals(t.FilePath, path, StringComparison.OrdinalIgnoreCase))) continue;
+                var doc = DocumentViewModel.CreateDeferred(path);
+                ConfigureDoc(doc, path);
+                Tabs.Add(doc);
+            }
         }
         finally { _restoring = false; }
 
+        // Selecting the active tab is what loads it (the rest stay deferred).
         if (data.Active >= 0 && data.Active < Tabs.Count) SelectedTab = Tabs[data.Active];
+        else if (Tabs.Count > 0) SelectedTab = Tabs[0];
         SaveSession();
     }
 
@@ -462,6 +522,21 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         foreach (var path in paths)
             await OpenPathAsync(path);
+    }
+
+    /// <summary>Applies config/presets/sinks to a tab (before or after its content loads).</summary>
+    private void ConfigureDoc(DocumentViewModel doc, string path)
+    {
+        doc.TextboxFontSize = Config.TextboxFontSize;
+        doc.TextboxFrameColor = Config.TextboxFrameColorValue;
+        doc.TextboxFrameOpacity = Config.TextboxFrameOpacity;
+        ApplyPresetToDoc(doc);
+        var saved = ViewStates.Get(path);
+        if (saved is not null) doc.InitialView = (saved.Zoom, saved.OffsetX, saved.OffsetY);
+        doc.ViewStateSink = (z, x, y) => ViewStates.Set(path, z, x, y);
+        doc.CertifyRequested = sig => CertifySignature(doc, sig);
+        doc.OpenUriRequested += OpenExternalUri;
+        doc.RecoverBytes = _autosave.TryLoad(path); // unsaved edits from a previous run
     }
 
     public async Task OpenPathAsync(string path, bool forceNewTab = false)
@@ -481,16 +556,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         StatusText = $"Opening {path}…";
         try
         {
-            var doc = await DocumentViewModel.LoadAsync(path);
-            doc.TextboxFontSize = Config.TextboxFontSize;
-            doc.TextboxFrameColor = Config.TextboxFrameColorValue;
-            doc.TextboxFrameOpacity = Config.TextboxFrameOpacity;
-            ApplyPresetToDoc(doc);
-            var saved = ViewStates.Get(path);
-            if (saved is not null) doc.InitialView = (saved.Zoom, saved.OffsetX, saved.OffsetY);
-            doc.ViewStateSink = (z, x, y) => ViewStates.Set(path, z, x, y);
-            doc.CertifyRequested = sig => CertifySignature(doc, sig);
-            doc.OpenUriRequested += OpenExternalUri;
+            var doc = DocumentViewModel.CreateDeferred(path);
+            ConfigureDoc(doc, path);
+            await doc.EnsureLoadedAsync();
             Tabs.Add(doc);
             SelectedTab = doc;
             Recent.Add(path);
@@ -596,6 +664,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IsToolbarVisible = cfg.ShowToolbar;
         ApplyTabsConfig();
         OnPropertyChanged(nameof(IsTitlebarHidden));
+        OnPropertyChanged(nameof(ShowChromeButtons));
+        OnPropertyChanged(nameof(ShowTabsButtons));
+        StartAutosaveTimer(); // interval may have changed
         ConfigApplied?.Invoke(cfg);
         StatusText = err ?? "Config reloaded";
     }
@@ -630,6 +701,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         if (SelectedTab is null) return;
         await SelectedTab.SaveAsync();
+        ClearAutosave(SelectedTab.FilePath); // on-disk now matches; drop the recovery copy
         StatusText = $"Saved {SelectedTab.Title}";
     }
 

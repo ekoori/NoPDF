@@ -40,6 +40,10 @@ public sealed class AppConfig
     /// <summary>Min/close buttons ride with the tabs panel instead of the top chrome.</summary>
     public bool TitleButtonsInTabs { get; set; }
 
+    /// <summary>Minutes between autosaves of unsaved edits to the temp cache (0 = off).
+    /// Edits are always cached on exit regardless.</summary>
+    public int AutosaveMinutes { get; set; } = 5;
+
     /// <summary>Parsed: position (top/bottom/left/right/off), rows (top/bottom),
     /// peek ms (left/right; -1 = always shown).</summary>
     public (string Pos, int Rows, int PeekMs) TabsParsed
@@ -282,6 +286,7 @@ command_history_size: 200
 history_visible: 5        # history lines shown above the ":" line
 tabs: top 3               # tabs panel: top|bottom <rows> | left|right <peek-ms> | on | off  (:tabspanel)
 title_buttons_in_tabs: false  # false = min/close stay top-right; true = they ride with the tabs panel
+autosave_minutes: 5       # cache unsaved edits every N minutes (0 = only on exit)
 scroll_rows: 3
 
 # Text-box annotation defaults.

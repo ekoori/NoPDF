@@ -29,6 +29,8 @@ public partial class MainWindow : Window
             CopyHandler = CopySelectionAsync,
             CopyTextHandler = CopyTextAsync,
         };
+        // Closing the window (X, Alt+F4, shutdown) must still cache unsaved edits.
+        Closing += (_, _) => Vm.AutosaveNow();
         vm.QuitRequested += () =>
         {
             if (Avalonia.Application.Current?.ApplicationLifetime
