@@ -77,6 +77,16 @@ public sealed partial class PageViewModel : ViewModelBase
     /// <summary>Set when a find match awaits scrolling into view; the view clears it.</summary>
     public bool PendingFindReveal { get; set; }
 
+    /// <summary>A page-space rect awaiting scroll-into-view (e.g. a picked annotation).</summary>
+    public TextRect? PendingRevealRect { get; set; }
+    public event Action? RevealRectRequested;
+
+    public void RequestReveal(TextRect rect)
+    {
+        PendingRevealRect = rect;
+        RevealRectRequested?.Invoke();
+    }
+
     public PageViewModel(DocumentViewModel owner, int pageIndex, PageInfo size)
     {
         _owner = owner;

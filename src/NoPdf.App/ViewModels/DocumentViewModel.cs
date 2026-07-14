@@ -371,8 +371,10 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     private void SelectAnnotationItem(AnnotationListItem? item)
     {
         if (item is null) return;
-        SelectAnnotation(PageOf(item.Model), item.Model);
+        var page = PageOf(item.Model);
+        SelectAnnotation(page, item.Model);
         GoToPage(item.PageNumber);
+        page?.RequestReveal(item.Model.Bounds); // focus the annotation itself, not just the page
     }
 
     public void DeleteSelectedAnnotation()
@@ -548,6 +550,28 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public event Action<string>? OpenUriRequested;
 
     private const string HintKeys = "fjdkslaghrueiwovncmbt";
+
+    /// <summary>Links on a page (lazily read once per document).</summary>
+    public IReadOnlyList<PdfLink> LinksOn(int pageIndex)
+    {
+        _links ??= LinkReader.ReadAll(_workingBytes);
+        return _links.TryGetValue(pageIndex, out var l) ? l : Array.Empty<PdfLink>();
+    }
+
+    /// <summary>The link at a page-space point, or null.</summary>
+    public PdfLink? LinkAt(int pageIndex, double x, double y)
+    {
+        foreach (var l in LinksOn(pageIndex))
+            if (x >= l.Rect.Left && x <= l.Rect.Right && y >= l.Rect.Bottom && y <= l.Rect.Top) return l;
+        return null;
+    }
+
+    /// <summary>Follows a link: internal pages jump, URIs open externally.</summary>
+    public void FollowLink(PdfLink link)
+    {
+        if (link.TargetPage is { } tp) GoToPage(tp + 1);
+        else if (!string.IsNullOrEmpty(link.Uri)) OpenUriRequested?.Invoke(link.Uri!);
+    }
 
     /// <summary>Collects link hints for the currently visible (realized) pages.</summary>
     public bool EnterHintMode()

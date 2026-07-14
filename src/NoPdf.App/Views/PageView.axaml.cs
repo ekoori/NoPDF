@@ -50,14 +50,30 @@ public partial class PageView : UserControl
         {
             if (this.IsAttachedToVisualTree()) _current.SetRealized(false);
             _current.FindRevealRequested -= OnFindReveal;
+            _current.RevealRectRequested -= OnRevealRect;
         }
         _current = DataContext as PageViewModel;
         if (_current is not null)
         {
             if (this.IsAttachedToVisualTree()) _current.SetRealized(true);
             _current.FindRevealRequested += OnFindReveal;
+            _current.RevealRectRequested += OnRevealRect;
             if (_current.PendingFindReveal) OnFindReveal();
+            if (_current.PendingRevealRect is not null) OnRevealRect();
         }
+    }
+
+    /// <summary>Scrolls a requested page-space rect (e.g. a picked annotation) into view.</summary>
+    private void OnRevealRect()
+    {
+        var pg = _current;
+        if (pg?.PendingRevealRect is null) return;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (_current != pg || pg.PendingRevealRect is not { } r) return;
+            pg.PendingRevealRect = null;
+            PageArea.BringIntoView(pg.Transform.ToDip(r).Inflate(64));
+        }, Avalonia.Threading.DispatcherPriority.Background);
     }
 
     /// <summary>Scrolls the current find-match selection into view.</summary>
@@ -96,6 +112,14 @@ public partial class PageView : UserControl
 
     // ---------- coordinate helpers ----------
 
+    /// <summary>True if a PDF link sits under the pointer (so pan should defer to it).</summary>
+    public bool HasLinkAt(PointerEventArgs e)
+    {
+        if (_current is null) return false;
+        var p = ToPage(AreaPos(e));
+        return _current.Owner.LinkAt(_current.PageIndex, p.X, p.Y) is not null;
+    }
+
     private PdfPoint ToPage(Point p) => _current!.Transform.ToPage(p);
     private Point ToDip(PdfPoint p) => _current!.Transform.ToDip(p);
     private Point AreaPos(PointerEventArgs e) => e.GetPosition(PageArea);
@@ -120,6 +144,10 @@ public partial class PageView : UserControl
         switch (tool)
         {
             case EditorTool.Hand:
+                // In view/pan mode a click follows a link under the cursor.
+                if (_current.Owner.LinkAt(_current.PageIndex, page.X, page.Y) is { } link)
+                { _current.Owner.FollowLink(link); e.Handled = true; }
+                return; // otherwise pan is handled by DocumentView
             case EditorTool.Zoom:
                 return; // pan handled by DocumentView
 
@@ -636,6 +664,7 @@ public partial class PageView : UserControl
     // ---------- hover cursor ----------
 
     private static readonly Cursor CArrow = new(StandardCursorType.Arrow);
+    private static readonly Cursor CFinger = new(StandardCursorType.Hand);
     private static readonly Cursor CIbeam = new(StandardCursorType.Ibeam);
     private static readonly Cursor CCross = new(StandardCursorType.Cross);
     private static readonly Cursor CMove = new(StandardCursorType.SizeAll);
@@ -653,7 +682,11 @@ public partial class PageView : UserControl
         Cursor cursor = CArrow;
         switch (_current.Owner.CurrentTool)
         {
-            case EditorTool.Hand: return; // DocumentView sets the hand cursor
+            case EditorTool.Hand:
+                // Finger over a link, otherwise leave the pan (open-hand) cursor.
+                Cursor = _current.Owner.LinkAt(_current.PageIndex, page.X, page.Y) is not null
+                    ? CFinger : PanCursors.Open;
+                return;
             case EditorTool.Zoom:
             case EditorTool.Line or EditorTool.Rectangle or EditorTool.Arrow
                 or EditorTool.Polyline or EditorTool.Note or EditorTool.TextBox

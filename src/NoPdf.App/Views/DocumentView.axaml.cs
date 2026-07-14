@@ -250,6 +250,8 @@ public partial class DocumentView : UserControl
         var props = e.GetCurrentPoint(this).Properties;
         bool hand = _vm?.CurrentTool == EditorTool.Hand && props.IsLeftButtonPressed;
         if (!hand && !props.IsMiddleButtonPressed) return;
+        // In view mode, a click on a link follows it instead of starting a pan.
+        if (hand && (e.Source as Visual)?.FindAncestorOfType<PageView>()?.HasLinkAt(e) == true) return;
         var sv = Scroll;
         if (sv is null) return;
 
