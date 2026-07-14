@@ -1,15 +1,19 @@
-# noPDF release notes
+﻿# noPDF release notes
 
 Version scheme `v0.0.X-beta.YY`: **X** is the public release line, **YY** the
 local build number (raised on every non-debug build). Public releases are cut with
 `scripts/release.ps1 -Publish`, which bumps **X**, resets **YY** to `00`, and
 publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
-## Unreleased (0.0.2 line)
+## Unreleased (0.0.3 line)
+
+_Nothing yet._
+
+## v0.0.3-beta.00 - 2026-07-15
 
 Printing:
 - **`:print` actually prints.** It used to hand the PDF to the default handler's
-  "print" verb — which is noPDF itself — so it always failed. Pages are now
+  "print" verb â€” which is noPDF itself â€” so it always failed. Pages are now
   rasterised and sent to the printer, annotations included. Windows only.
 - Defaults live in the config (`print_printer`, `print_copies`, `print_fit_to_page`,
   `print_grayscale`, `print_landscape`); **`:printdialog`** picks them per-print and
@@ -18,21 +22,21 @@ Printing:
 Commands & docs:
 - One command catalogue now drives **`:help`** (a landscape table per menu group:
   Command / Aliases / Keys / Description), the **config file's comments**, and the
-  status-bar usage hint — so they can't drift apart.
+  status-bar usage hint â€” so they can't drift apart.
 - `:open "path with spaces"` works, and `:open` loads into the current tab.
 - `:copypath` reports the path it copied.
 
 Session & recovery:
 - **Autosave**: unsaved edits are cached to `%AppData%/NoPdf/autosave` every
   `autosave_minutes` (default 5, 0 = off) and on exit, then recovered on the next
-  start — still linked to the original file, so saving writes back to it.
+  start â€” still linked to the original file, so saving writes back to it.
 - **Lazy tabs**: restoring a session no longer reads every file up front; a tab
   loads the first time you open it.
 
 Tabs, help & bookmarks:
 - Opening a file that's already open focuses its tab instead of duplicating it
   (paths are normalised; drag-drop / OS-launch / command all agree).
-- `:showtabs` is now **`:tabspanel`** — no args toggles it; position it `top`,
+- `:showtabs` is now **`:tabspanel`** â€” no args toggles it; position it `top`,
   `bottom`, `left` or `right` of the view. `title_buttons_in_tabs` (default off)
   makes the min/close buttons ride with the panel.
 - **`:help` opens a real help document in a tab** (commands, hotkeys, aliases).
@@ -48,7 +52,7 @@ Formats & view:
 - Open **CBZ/CBR/CB7/CBT** comic archives and **DjVu** documents (converted to PDF on
   load; DjVu needs DjVuLibre's `ddjvu` on PATH).
 - **View modes**: `:view scroll [X]` (vertical scroll, X across), `:view full [X]`
-  (only the X page(s) in focus fill the viewport — no other page can appear, at any
+  (only the X page(s) in focus fill the viewport â€” no other page can appear, at any
   zoom; scrolling turns pages) and `:view scrollh [X]` (horizontal scroll, X rows,
   filling each column downwards).
 - The tabs panel can sit top/bottom/left/right, and the top bar collapses when it
@@ -94,3 +98,4 @@ Signatures & fixes (earlier in the 0.0.2 line):
   Linux, and macOS (Intel + Apple Silicon). Keyboard-driven PDF viewer/editor:
   annotations, bookmarks, page ops, visible + cryptographic signatures,
   qutebrowser-style command line, theming, session persistence.
+

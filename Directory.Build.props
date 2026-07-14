@@ -1,12 +1,12 @@
-<Project>
+﻿<Project>
   <!-- Version source of truth.
-       VersionPrefix (0.0.X) is the public release line — bump X for a public
+       VersionPrefix (0.0.X) is the public release line â€” bump X for a public
        release via  scripts/release.ps1 -Publish .
        The build number YY is kept in the gitignored  build-number.txt  and is
        auto-incremented on every Debug build (see Directory.Build.targets), so the
        app version is  0.0.X-beta.YY . -->
   <PropertyGroup>
-    <VersionPrefix>0.0.2</VersionPrefix>
+    <VersionPrefix>0.0.3</VersionPrefix>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 </Project>
