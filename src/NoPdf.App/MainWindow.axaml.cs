@@ -131,6 +131,17 @@ public partial class MainWindow : Window
             Vm.SelectedTab?.GoToPage(t.PageNumber);
     }
 
+    /// <summary>Selects and scrolls to the thumbnail of the page currently shown in the view.</summary>
+    private void OnThumbFocusCurrent(object? sender, RoutedEventArgs e)
+    {
+        var doc = Vm.SelectedTab;
+        if (doc is null || doc.Thumbnails.Count == 0) return;
+        int idx = System.Math.Clamp(doc.CurrentPage - 1, 0, doc.Thumbnails.Count - 1);
+        ThumbList.SelectedItems?.Clear();
+        ThumbList.SelectedIndex = idx;
+        ThumbList.ScrollIntoView(idx);
+    }
+
     private void OnThumbRotateLeft(object? sender, RoutedEventArgs e)
         => Vm.SelectedTab?.RotatePages(SelectedThumbIndices(), -90);
 

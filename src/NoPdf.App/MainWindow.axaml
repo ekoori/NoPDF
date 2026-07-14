@@ -429,6 +429,9 @@
                                Margin="12,10,12,6"/>
                     <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,0,1" Padding="6,2">
                         <StackPanel Orientation="Horizontal" Spacing="1">
+                            <Button Classes="pageop" ToolTip.Tip="Go to the page shown in the view"
+                                    Click="OnThumbFocusCurrent">
+                                <PathIcon Data="{StaticResource IconTarget}"/></Button>
                             <Button Classes="pageop" ToolTip.Tip="Rotate left" Click="OnThumbRotateLeft">
                                 <PathIcon Data="{StaticResource IconRotateLeft}"/></Button>
                             <Button Classes="pageop" ToolTip.Tip="Rotate right" Click="OnThumbRotateRight">
