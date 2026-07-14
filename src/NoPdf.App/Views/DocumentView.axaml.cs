@@ -45,6 +45,12 @@ public partial class DocumentView : UserControl
 
     private void OnScrollPage(int dir)
     {
+        // In Full view a "page" of scrolling is the next/previous spread.
+        if (_vm is { ViewMode: PageViewMode.Full })
+        {
+            _vm.GoToPage(_vm.CurrentPage + dir * Math.Max(1, _vm.PagesPerRow));
+            return;
+        }
         var sv = Scroll;
         if (sv is null) return;
         OnScrollBy(0, dir * sv.Viewport.Height * 0.9);
@@ -61,6 +67,8 @@ public partial class DocumentView : UserControl
     private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
         if (_vm is null) return;
+        // Full view shows only the focused page(s); its page is driven by navigation.
+        if (_vm.ViewMode == PageViewMode.Full) return;
         var sv = Scroll;
         if (sv is null) return;
         double offset = sv.Offset.Y;
@@ -150,30 +158,58 @@ public partial class DocumentView : UserControl
         _vm?.SetDpiScale(scaling);
     }
 
-    private static readonly Avalonia.Controls.Templates.FuncTemplate<Panel?> WrapHTemplate =
-        new(() => new WrapPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center });
-    private static readonly Avalonia.Controls.Templates.FuncTemplate<Panel?> WrapVTemplate =
-        new(() => new WrapPanel { Orientation = Avalonia.Layout.Orientation.Vertical, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
     private static readonly Avalonia.Controls.Templates.FuncTemplate<Panel?> StackPanelTemplate =
         new(() => new VirtualizingStackPanel());
+
+    /// <summary>A wrap panel with a fixed slot size, so exactly N pages fit per row
+    /// (horizontal) or per column (vertical) regardless of the page's own size.</summary>
+    private static Avalonia.Controls.Templates.FuncTemplate<Panel?> WrapTemplate(
+        Avalonia.Layout.Orientation o, double itemW, double itemH)
+        => new(() =>
+        {
+            var p = new WrapPanel { Orientation = o };
+            if (o == Avalonia.Layout.Orientation.Horizontal)
+            {
+                p.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+                if (itemW > 0) p.ItemWidth = itemW;
+            }
+            else
+            {
+                p.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+                if (itemH > 0) p.ItemHeight = itemH;
+            }
+            return p;
+        });
 
     private void OnViewModeChanged()
     {
         if (_vm is null) return;
-        int n = _vm.PagesPerRow;
+        var sv0 = Scroll;
+        var vp0 = sv0?.Viewport ?? default;
+        int n = Math.Max(1, _vm.PagesPerRow);
+
         switch (_vm.ViewMode)
         {
             case PageViewMode.ScrollH:
-                // Pages fill a column top-to-bottom then wrap rightwards: scroll horizontally.
-                PageList.ItemsPanel = WrapVTemplate;
+                // Pages fill a column top-to-bottom then wrap rightwards → horizontal scroll.
+                // A fixed slot height is what forces exactly n rows.
+                PageList.ItemsPanel = WrapTemplate(Avalonia.Layout.Orientation.Vertical, 0,
+                    vp0.Height > 0 ? vp0.Height / n : 0);
                 ScrollViewer.SetVerticalScrollBarVisibility(PageList, ScrollBarVisibility.Disabled);
                 ScrollViewer.SetHorizontalScrollBarVisibility(PageList, ScrollBarVisibility.Auto);
                 break;
             case PageViewMode.Full:
+                // Only the focused page(s) are in the list, so nothing scrolls.
+                PageList.ItemsPanel = WrapTemplate(Avalonia.Layout.Orientation.Horizontal,
+                    vp0.Width > 0 ? vp0.Width / n : 0, 0);
+                ScrollViewer.SetHorizontalScrollBarVisibility(PageList, ScrollBarVisibility.Disabled);
+                ScrollViewer.SetVerticalScrollBarVisibility(PageList, ScrollBarVisibility.Disabled);
+                break;
             case PageViewMode.Scroll when n > 1:
                 // Horizontal scrolling must be OFF or the wrap panel gets infinite width
                 // and lays every page out in one endless row instead of wrapping.
-                PageList.ItemsPanel = WrapHTemplate;
+                PageList.ItemsPanel = WrapTemplate(Avalonia.Layout.Orientation.Horizontal,
+                    vp0.Width > 0 ? vp0.Width / n : 0, 0);
                 ScrollViewer.SetHorizontalScrollBarVisibility(PageList, ScrollBarVisibility.Disabled);
                 ScrollViewer.SetVerticalScrollBarVisibility(PageList, ScrollBarVisibility.Auto);
                 break;
@@ -183,6 +219,7 @@ public partial class DocumentView : UserControl
                 ScrollViewer.SetVerticalScrollBarVisibility(PageList, ScrollBarVisibility.Auto);
                 break;
         }
+
         Dispatcher.UIThread.Post(() =>
         {
             var sv = Scroll;

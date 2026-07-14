@@ -30,6 +30,10 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     private byte[] _workingBytes;
 
     public ObservableCollection<PageViewModel> Pages { get; } = new();
+
+    /// <summary>What the viewport actually shows: every page, except in Full view where
+    /// it is only the page(s) in focus (so there is nothing to scroll to).</summary>
+    public ObservableCollection<PageViewModel> VisiblePages { get; } = new();
     public ObservableCollection<PageThumbnail> Thumbnails { get; } = new();
     /// <summary>The document's bookmarks, read from (and saved into) the PDF outline.</summary>
     public ObservableCollection<BookmarkNode> Outline { get; } = new();
@@ -158,6 +162,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
             Pages.Add(pvm);
             Thumbnails.Add(new PageThumbnail(this, i, Document.GetPageSize(i)));
         }
+        RefreshVisiblePages();
     }
 
     /// <summary>Adds a bookmark to the PDF's own outline, so saving persists it in the file.</summary>
@@ -232,6 +237,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         int n = Math.Clamp(count ?? 1, 1, 8);
         ViewMode = m;
         PagesPerRow = n;
+        RefreshVisiblePages();
         ViewModeChanged?.Invoke();
         return m switch
         {
@@ -239,6 +245,25 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
             PageViewMode.ScrollH => $"Horizontal scroll, {n} row(s)",
             _ => n > 1 ? $"Scroll view, {n} across" : "Scroll view",
         };
+    }
+
+    /// <summary>Rebuilds <see cref="VisiblePages"/> for the current mode: every page,
+    /// or in Full view just the page(s) in focus.</summary>
+    public void RefreshVisiblePages()
+    {
+        if (ViewMode != PageViewMode.Full)
+        {
+            if (VisiblePages.Count == Pages.Count && VisiblePages.SequenceEqual(Pages)) return;
+            VisiblePages.Clear();
+            foreach (var p in Pages) VisiblePages.Add(p);
+            return;
+        }
+        int n = Math.Max(1, PagesPerRow);
+        int start = Math.Clamp(CurrentPage - 1, 0, Math.Max(0, Pages.Count - 1));
+        var window = Pages.Skip(start).Take(n).ToList();
+        if (VisiblePages.SequenceEqual(window)) return;
+        VisiblePages.Clear();
+        foreach (var p in window) VisiblePages.Add(p);
     }
 
     /// <summary>Zooms to satisfy the current view mode within the viewport.</summary>
@@ -276,6 +301,8 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
             _currentPage = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(PageLabel));
+            // Full view shows only the focused page(s), so navigating swaps them out.
+            if (ViewMode == PageViewMode.Full) RefreshVisiblePages();
         }
     }
 
@@ -895,6 +922,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
         // The outline lives in the file, so re-read it after any structural change.
         RefreshOutline();
+        RefreshVisiblePages();
 
         oldDoc?.Dispose();
         MarkDirty();
@@ -973,6 +1001,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
             }
             oldDoc?.Dispose();
             RefreshOutline(); // bookmarks live in the bytes
+            RefreshVisiblePages();
             OnPropertyChanged(nameof(PageCount)); OnPropertyChanged(nameof(PageLabel));
         }
         else

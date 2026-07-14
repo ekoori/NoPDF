@@ -25,6 +25,9 @@ public sealed class AutosaveStore
     private readonly string _indexPath;
     private Dictionary<string, Entry> _index = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>How long a cached copy is kept before it's discarded.</summary>
+    public TimeSpan Expiry { get; set; } = TimeSpan.FromHours(24);
+
     public AutosaveStore()
     {
         _dir = Path.Combine(
@@ -45,6 +48,25 @@ public sealed class AutosaveStore
                 if (File.Exists(Path.Combine(_dir, e.CacheFile))) _index[e.OriginalPath] = e;
         }
         catch { _index = new(StringComparer.OrdinalIgnoreCase); }
+    }
+
+    /// <summary>Drops cached copies older than <see cref="Expiry"/> (and orphaned files).</summary>
+    public void PruneExpired()
+    {
+        try
+        {
+            var cutoff = DateTime.UtcNow - Expiry;
+            foreach (var key in new List<string>(_index.Keys))
+                if (_index[key].SavedUtc < cutoff) Remove(key);
+
+            // Sweep cache files no index entry refers to any more.
+            var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var e in _index.Values) known.Add(e.CacheFile);
+            foreach (var f in Directory.GetFiles(_dir, "*.pdf"))
+                if (!known.Contains(Path.GetFileName(f)))
+                    try { File.Delete(f); } catch { }
+        }
+        catch { }
     }
 
     private void Flush()

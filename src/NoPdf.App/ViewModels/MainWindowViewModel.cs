@@ -67,6 +67,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private void StartAutosaveTimer()
     {
+        // Cached edits (incl. from files closed without saving) expire after this long.
+        _autosave.Expiry = Config.AutosaveExpiryHours > 0
+            ? TimeSpan.FromHours(Config.AutosaveExpiryHours)
+            : TimeSpan.MaxValue;
+        _autosave.PruneExpired();
+
         _autosaveTimer?.Stop();
         int minutes = Config.AutosaveMinutes;
         if (minutes <= 0) return; // 0 disables periodic autosave
@@ -539,6 +545,43 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         doc.RecoverBytes = _autosave.TryLoad(path); // unsaved edits from a previous run
     }
 
+    /// <summary>`:open` semantics — load the file into the current tab (replacing it),
+    /// focusing an existing tab if the file is already open.</summary>
+    public async Task OpenInCurrentTabAsync(string path)
+    {
+        try { path = Path.GetFullPath(path); } catch { /* keep as given */ }
+
+        var existing = Tabs.FirstOrDefault(t =>
+            string.Equals(t.FilePath, path, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null) { SelectedTab = existing; return; }
+
+        var current = SelectedTab;
+        if (current is null) { await OpenPathAsync(path); return; }
+
+        StatusText = $"Opening {path}…";
+        try
+        {
+            var doc = DocumentViewModel.CreateDeferred(path);
+            ConfigureDoc(doc, path);
+            await doc.EnsureLoadedAsync();
+
+            int idx = Math.Max(0, Tabs.IndexOf(current));
+            if (current.IsLoaded && current.IsDirty)
+                try { _autosave.Save(current.FilePath, current.ExportWithAnnotations()); } catch { }
+            _closedTabs.Push((current.FilePath, idx)); // :reopen brings it back
+
+            Tabs.Insert(idx, doc);
+            Tabs.Remove(current);
+            current.Dispose();
+            SelectedTab = doc;
+
+            Recent.Add(path);
+            RefreshRecent();
+            StatusText = $"Opened {doc.Title} ({doc.Pages.Count} pages)";
+        }
+        catch (Exception ex) { StatusText = $"Failed to open: {ex.Message}"; }
+    }
+
     public async Task OpenPathAsync(string path, bool forceNewTab = false)
     {
         // Normalise so the same file opened via dialog / drag-drop / command / the OS
@@ -577,6 +620,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         doc ??= SelectedTab;
         if (doc is null) return;
         int idx = Tabs.IndexOf(doc);
+        // Closing with unsaved edits keeps a recoverable copy (until it expires).
+        if (doc.IsLoaded && doc.IsDirty)
+            try { _autosave.Save(doc.FilePath, doc.ExportWithAnnotations()); } catch { }
         _closedTabs.Push((doc.FilePath, idx));   // remember for reopen/undo
         Tabs.Remove(doc);
         doc.Dispose();

@@ -44,6 +44,9 @@ public sealed class AppConfig
     /// Edits are always cached on exit regardless.</summary>
     public int AutosaveMinutes { get; set; } = 5;
 
+    /// <summary>How long a cached copy of unsaved edits is kept, in hours (0 = forever).</summary>
+    public int AutosaveExpiryHours { get; set; } = 24;
+
     /// <summary>Parsed: position (top/bottom/left/right/off), rows (top/bottom),
     /// peek ms (left/right; -1 = always shown).</summary>
     public (string Pos, int Rows, int PeekMs) TabsParsed
@@ -287,6 +290,7 @@ history_visible: 5        # history lines shown above the ":" line
 tabs: top 3               # tabs panel: top|bottom <rows> | left|right <peek-ms> | on | off  (:tabspanel)
 title_buttons_in_tabs: false  # false = min/close stay top-right; true = they ride with the tabs panel
 autosave_minutes: 5       # cache unsaved edits every N minutes (0 = only on exit)
+autosave_expiry_hours: 24 # discard cached unsaved edits after N hours (0 = keep forever)
 scroll_rows: 3
 
 # Text-box annotation defaults.

@@ -190,23 +190,6 @@
             </StackPanel>
         </Grid>
 
-        <!-- ===== Tabs panel: bottom ===== -->
-        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Background="{DynamicResource ChromeBackground}"
-              IsVisible="{Binding ShowBottomTabs}">
-            <ScrollViewer Grid.Column="0" MaxHeight="{Binding TabsMaxHeight}"
-                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                          Padding="4,3">
-                <ItemsControl ItemsSource="{Binding Tabs}" ItemTemplate="{StaticResource TabChip}">
-                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                </ItemsControl>
-            </ScrollViewer>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
-                        IsVisible="{Binding ShowTabsButtons}">
-                <Button Classes="wbtn" ToolTip.Tip="Minimise" Command="{Binding MinimizeCommand}" Content="&#x2013;"/>
-                <Button Classes="wbtn wclose" ToolTip.Tip="Close" Command="{Binding QuitCommand}" Content="&#x2715;"/>
-            </StackPanel>
-        </Grid>
-
         <!-- ===== Toolbar ===== -->
         <Border DockPanel.Dock="Top" Background="{DynamicResource ChromeBackground}" BorderBrush="{DynamicResource ChromeBorder}"
                 BorderThickness="0,0,0,1" Padding="8,5"
@@ -341,6 +324,23 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </Border>
+
+        <!-- ===== Tabs panel: bottom (docked last so it sits above the status/command bars) ===== -->
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Background="{DynamicResource ChromeBackground}"
+              IsVisible="{Binding ShowBottomTabs}">
+            <ScrollViewer Grid.Column="0" MaxHeight="{Binding TabsMaxHeight}"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          Padding="4,3">
+                <ItemsControl ItemsSource="{Binding Tabs}" ItemTemplate="{StaticResource TabChip}">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </ScrollViewer>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                        IsVisible="{Binding ShowTabsButtons}">
+                <Button Classes="wbtn" ToolTip.Tip="Minimise" Command="{Binding MinimizeCommand}" Content="&#x2013;"/>
+                <Button Classes="wbtn wclose" ToolTip.Tip="Close" Command="{Binding QuitCommand}" Content="&#x2715;"/>
+            </StackPanel>
+        </Grid>
 
         <!-- ===== Main area ===== -->
         <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">

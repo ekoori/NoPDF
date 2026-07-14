@@ -93,7 +93,7 @@ public sealed class CommandRegistry
             {
                 var p = Doc?.FilePath;
                 if (string.IsNullOrEmpty(p)) return Msg("No document");
-                _main.RequestCopyText(p); return Msg("Copied path");
+                _main.RequestCopyText(p); return Msg("Copied " + p);
             },
             ["session"] = Session, ["sess"] = Session,
             ["scrolldown"] = (_, _) => Scroll(0, +1),
@@ -164,31 +164,56 @@ public sealed class CommandRegistry
 
     private async Task<string?> Open(string[] args, string rest)
     {
-        if (args.Length == 0)
+        var tokens = Tokenize(rest);
+        if (tokens.Count == 0)
         {
             await _main.OpenCommand.ExecuteAsync(null);
             return null;
         }
         int opened = 0;
-        foreach (var token in args)
+        foreach (var token in tokens)
         {
             string path = _quickmarks.Resolve(token) ?? token;
             if (!File.Exists(path)) return $"Not found: {token}";
-            await _main.OpenPathAsync(path);
+            // The first file replaces the current tab; extra files get their own.
+            if (opened == 0) await _main.OpenInCurrentTabAsync(path);
+            else await _main.OpenPathAsync(path, forceNewTab: true);
             opened++;
         }
         return opened == 1 ? null : $"Opened {opened} files";
     }
 
+    /// <summary>Splits a command's arguments on spaces, honouring "quoted paths".</summary>
+    public static List<string> Tokenize(string rest)
+    {
+        var list = new List<string>();
+        if (string.IsNullOrWhiteSpace(rest)) return list;
+        var sb = new System.Text.StringBuilder();
+        bool inQuote = false;
+        foreach (char c in rest)
+        {
+            if (c == '"') { inQuote = !inQuote; continue; }
+            if (c == ' ' && !inQuote)
+            {
+                if (sb.Length > 0) { list.Add(sb.ToString()); sb.Clear(); }
+                continue;
+            }
+            sb.Append(c);
+        }
+        if (sb.Length > 0) list.Add(sb.ToString());
+        return list;
+    }
+
     private async Task<string?> OpenNewTab(string[] args, string rest)
     {
-        if (args.Length == 0)
+        var tokens = Tokenize(rest);
+        if (tokens.Count == 0)
         {
             await _main.OpenNewTabCommand.ExecuteAsync(null);
             return null;
         }
         int opened = 0;
-        foreach (var token in args)
+        foreach (var token in tokens)
         {
             string path = _quickmarks.Resolve(token) ?? token;
             if (!File.Exists(path)) return $"Not found: {token}";
