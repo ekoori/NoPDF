@@ -605,31 +605,81 @@ public sealed class CommandRegistry
     /// <summary>Builds a help PDF (commands + hotkeys) and opens it in a tab.</summary>
     private async Task<string?> Help()
     {
+        // command -> the keys bound to it (config bindings + user aliases).
+        var keys = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        void AddKey(string cmd, string key)
+        {
+            var head = cmd.TrimStart(':').Split(' ')[0];
+            if (head.Length == 0) return;
+            if (!keys.TryGetValue(head, out var l)) keys[head] = l = new();
+            if (!l.Contains(key)) l.Add(key);
+        }
+        foreach (var kv in _main.Config.NormalBindings) AddKey(kv.Value, kv.Key);
+        var userAliases = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in _main.Config.Aliases)
+        {
+            var head = kv.Value.TrimStart(':').Split(' ')[0];
+            if (head.Length == 0) continue;
+            if (!userAliases.TryGetValue(head, out var l)) userAliases[head] = l = new();
+            l.Add(kv.Key);
+        }
+
         var lines = new List<NoPdf.Core.Import.TextDocument.Line>
         {
-            new("Press ':' for the command line, '/' to search, 'f' to follow links.", false),
-            new("", false),
-            new("Commands", true),
+            new("Press ':' for the command line, '/' to search, 'f' to follow links."),
+            new("Commands are grouped below; a key shown in Keys runs that command."),
         };
-        foreach (var name in CommandNames())
-            lines.Add(new(UsageText.TryGetValue(name, out var u) ? "  " + u : "  " + name));
 
-        lines.Add(new("", false));
-        lines.Add(new("Hotkeys", true));
-        foreach (var kv in _main.Config.NormalBindings.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
-            lines.Add(new($"  {kv.Key,-12} {kv.Value}"));
+        const int wCmd = 32, wAlias = 16, wKeys = 14;
+        int wDesc = Math.Max(24, NoPdf.Core.Import.TextDocument.LineChars(landscape: true) - wCmd - wAlias - wKeys);
+        string indent = new(' ', wCmd + wAlias + wKeys);
 
-        if (_main.Config.Aliases.Count > 0)
+        foreach (var group in CommandDocs.Groups)
         {
-            lines.Add(new("", false));
-            lines.Add(new("Aliases", true));
-            foreach (var kv in _main.Config.Aliases.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
-                lines.Add(new($"  {kv.Key,-12} {kv.Value}"));
+            var items = CommandDocs.InGroup(group).ToList();
+            if (items.Count == 0) continue;
+            lines.Add(new(group, true));
+            lines.Add(new($"{"Command".PadRight(wCmd)}{"Aliases".PadRight(wAlias)}{"Keys".PadRight(wKeys)}Description"));
+            foreach (var c in items)
+            {
+                var al = new List<string>(c.Aliases);
+                if (userAliases.TryGetValue(c.Name, out var ua)) al.AddRange(ua);
+                string k = keys.TryGetValue(c.Name, out var kl) ? string.Join(" ", kl) : "";
+                var wrapped = Wrap(c.Description, wDesc);
+                lines.Add(new(Fit(c.Syntax, wCmd) + Fit(string.Join(" ", al), wAlias) + Fit(k, wKeys) + wrapped[0]));
+                for (int i = 1; i < wrapped.Count; i++) lines.Add(new(indent + wrapped[i]));
+            }
         }
+        return await WriteHelp(lines);
+    }
+
+    /// <summary>Greedy word wrap so long descriptions stay inside the table column.</summary>
+    private static List<string> Wrap(string text, int width)
+    {
+        var outp = new List<string>();
+        var line = new System.Text.StringBuilder();
+        foreach (var word in text.Split(' '))
+        {
+            if (line.Length > 0 && line.Length + 1 + word.Length > width) { outp.Add(line.ToString()); line.Clear(); }
+            if (line.Length > 0) line.Append(' ');
+            line.Append(word);
+        }
+        if (line.Length > 0) outp.Add(line.ToString());
+        if (outp.Count == 0) outp.Add("");
+        return outp;
+    }
+
+    /// <summary>Pads/truncates a cell so the monospaced help columns line up.</summary>
+    private static string Fit(string s, int width)
+        => (s.Length >= width ? s[..(width - 1)] : s).PadRight(width);
+
+    private async Task<string?> WriteHelp(List<NoPdf.Core.Import.TextDocument.Line> lines)
+    {
 
         try
         {
-            var bytes = NoPdf.Core.Import.TextDocument.Build($"noPDF {NoPdf.App.AppVersion.Informational} — help", lines);
+            var bytes = NoPdf.Core.Import.TextDocument.Build(
+                $"noPDF {NoPdf.App.AppVersion.Informational} — help", lines, landscape: true);
             string path = Path.Combine(Path.GetTempPath(), "noPDF-help.pdf");
             await File.WriteAllBytesAsync(path, bytes);
             await _main.OpenPathAsync(path);  // reuses the tab if help is already open
@@ -638,42 +688,13 @@ public sealed class CommandRegistry
         catch (Exception ex) { return "Help failed: " + ex.Message; }
     }
 
-    // ----- Usage hints (shown in the status bar as a command word is typed) -----
-
-    private static readonly Dictionary<string, string> UsageText = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["open"] = "open <path|mark>… — open file(s), reuse an open tab",
-        ["O"] = "O <path> — open in a new tab",
-        ["tabnew"] = "tabnew [path] — open a new tab",
-        ["page"] = "page <n|first|last|next|prev> — go to page",
-        ["zoom"] = "zoom <pct|in|out|reset|width|page>",
-        ["find"] = "find <text> — search all pages",
-        ["highlight"] = "highlight — highlight the selection",
-        ["rotate"] = "rotate <range> [cw|ccw|180]",
-        ["delete"] = "delete <range> — delete pages",
-        ["insert"] = "insert <path> [at] — insert a PDF",
-        ["merge"] = "merge <path> — append a PDF",
-        ["extract"] = "extract <range> [path] — export pages (dialog if no path)",
-        ["save"] = "save [path] — write annotations",
-        ["saveas"] = "saveas [path] — save a copy (dialog if no path)",
-        ["print"] = "print [range]",
-        ["m"] = "m <name> — quickmark the current file",
-        ["go"] = "go <name> — open a quickmark",
-        ["bookmark"] = "bookmark <name> — bookmark the current page",
-        ["bmdel"] = "bmdel <name> — remove a page bookmark",
-        ["session"] = "session <save|load|del|list> [name]",
-        ["copypath"] = "copypath — copy the file's full path",
-        ["marks"] = "marks — pick a quickmark to open",
-        ["toolbar"] = "toolbar — toggle the icon toolbar",
-        ["props"] = "props — toggle the annotation panel",
-        ["toc"] = "toc — toggle the bookmarks panel",
-        ["pages"] = "pages — toggle the thumbnails panel",
-    };
+    // ----- Usage hint (shown in the status bar as a command word is typed) -----
 
     public string? Usage(string name)
     {
         if (string.IsNullOrEmpty(name)) return null;
-        if (UsageText.TryGetValue(name, out var u)) return u;
+        var doc = CommandDocs.Find(name);
+        if (doc is not null) return doc.UsageLine;
         return _commands.ContainsKey(name) ? name : null;
     }
 

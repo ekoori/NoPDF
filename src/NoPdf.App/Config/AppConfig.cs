@@ -206,7 +206,12 @@ public sealed class AppConfig
         return fallback;
     }
 
-    public const string DefaultYaml = """
+    /// <summary>The default config file, with the command catalogue rendered into its
+    /// comments so the docs can never drift from the commands themselves.</summary>
+    public static string DefaultYaml =>
+        DefaultYamlTemplate.Replace("{COMMANDS}", Commands.CommandDocs.ConfigComment().TrimEnd('\n'));
+
+    private const string DefaultYamlTemplate = """
 # ── NoPdf configuration ───────────────────────────────────────────────
 # Edit and restart NoPdf. Binding values are command lines — exactly what
 # you'd type after ":".
@@ -223,60 +228,11 @@ public sealed class AppConfig
 #   <space> <tab> <cr> <esc> <bs> <del>
 # Multi-key sequences just concatenate, e.g. "gg", "z w"→ zw, "<space>f".
 #
-# ── ALL COMMANDS ──────────────────────────────────────────────────────
-# Every command is listed below (commented out). Uncomment a line under
-# `normal_bindings:` in the form `key: command` to bind it to a key.
-#
-#   # Files / tabs
-#   open <path>            open a file (reuses a tab for the same file)
-#   O <path>  / tabnew      open in a NEW tab
-#   tabnext                 next tab
-#   tabprev                 previous tab
-#   tabclose                close current tab
-#   close                   close current tab
-#   quit                    exit the app
-#   copypath                copy the current file's full path
-#
-#   # Sessions (all tabs)
-#   session save <name>     save the open tabs under a name
-#   session load <name>     replace tabs with a saved session
-#   session del <name>      delete a saved session
-#   session list            list saved sessions
-#
-#   # Navigate
-#   page <n|first|last|next|prev>
-#   scrollup / scrolldown / scrollleft / scrollright
-#   scrollpageup / scrollpagedown
-#
-#   # Zoom
-#   zoom <pct|in|out|reset|width|page>
-#
-#   # Find
-#   find <text> / findnext / findprev
-#
-#   # Tools
-#   hand  select  highlight  note  textbox  callout  line  rect  arrow  polyline
-#
-#   # Edit
-#   undo  redo  copy  delannot   (delannot = delete selected annotation)
-#
-#   # Pages
-#   rotate <range> [cw|ccw|180]   delete <range>
-#   insert <path> [at]   merge <path>   extract <range> <path>
-#
-#   # Panels / UI
-#   toc        toggle bookmarks panel
-#   pages      toggle thumbnails panel
-#   props      toggle annotation properties panel
-#   toolbar    toggle the icon toolbar
-#
-#   # Marks
-#   m <name> / go <name>          file quickmarks
-#   bookmark <name> / bmdel <name>  page bookmarks
-#
-#   # Misc
-#   print [range]   save [path]   saveas <path>   help
-# ──────────────────────────────────────────────────────────────────────
+# ── ALL COMMANDS ──────────────────────────────────────────
+# Grouped by what they do, like an app's menus. Bind any of them under
+# `normal_bindings:` as `key: command`. Prefix with ":" to pre-fill the
+# command line instead of running it, e.g.  o: ":open"
+{COMMANDS}
 
 theme: dark               # dark | light | inherit (follow the OS)
 show_toolbar: false       # the icon toolbar is hidden by default

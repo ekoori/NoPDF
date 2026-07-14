@@ -39,7 +39,7 @@ public static class DocumentImport
     private static byte[] ComicToPdf(string path)
     {
         var images = new List<(string name, byte[] data)>();
-        using (var archive = SharpCompress.Archives.ArchiveFactory.Open(path))
+        using (var archive = SharpCompress.Archives.ArchiveFactory.OpenArchive(path))
         {
             foreach (var entry in archive.Entries)
             {

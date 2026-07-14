@@ -16,16 +16,22 @@ public static class TextDocument
     /// <summary>A line of text; headings are drawn larger and bold.</summary>
     public readonly record struct Line(string Text, bool Heading = false);
 
-    private const double PageW = 595, PageH = 842, Margin = 56; // A4 points
+    private const double Margin = 56; // A4 points
 
-    public static byte[] Build(string title, IEnumerable<Line> lines)
+    /// <summary>Characters that fit on one Courier line at the body size, for callers
+    /// that need to wrap text themselves (Courier is 0.6 em wide).</summary>
+    public static int LineChars(bool landscape = false)
+        => (int)(((landscape ? 842.0 : 595.0) - 2 * Margin) / (9.5 * 0.6));
+
+    public static byte[] Build(string title, IEnumerable<Line> lines, bool landscape = false)
     {
+        double pageW = landscape ? 842 : 595, pageH = landscape ? 595 : 842;
         var doc = new PdfDocument();
         doc.Info.Title = title;
 
         var sb = new StringBuilder();
-        double y = PageH - Margin;
-        PdfPage page = NewPage(doc);
+        double y = pageH - Margin;
+        PdfPage page = NewPage(doc, pageW, pageH);
 
         void Flush()
         {
@@ -35,8 +41,8 @@ public static class TextDocument
         void Break()
         {
             Flush();
-            page = NewPage(doc);
-            y = PageH - Margin;
+            page = NewPage(doc, pageW, pageH);
+            y = pageH - Margin;
         }
         void Draw(string text, string font, double size)
         {
@@ -63,11 +69,11 @@ public static class TextDocument
         return ms.ToArray();
     }
 
-    private static PdfPage NewPage(PdfDocument doc)
+    private static PdfPage NewPage(PdfDocument doc, double pageW, double pageH)
     {
         var page = doc.AddPage();
-        page.Width = XUnitFromPoint(PageW);
-        page.Height = XUnitFromPoint(PageH);
+        page.Width = XUnitFromPoint(pageW);
+        page.Height = XUnitFromPoint(pageH);
 
         // Base-14 fonts: FB = Helvetica-Bold (titles), FC = Courier (body).
         var fonts = new PdfDictionary(doc);
