@@ -34,20 +34,28 @@ public sealed class AppConfig
     /// <summary>Number of history lines shown above the command line.</summary>
     public int HistoryVisible { get; set; } = 5;
 
-    /// <summary>Tab display: "top &lt;rows&gt;" | "left &lt;ms&gt;" | "on" | "off".</summary>
+    /// <summary>Tabs panel: "top|bottom &lt;rows&gt;" | "left|right &lt;peek-ms&gt;" | "on" | "off".</summary>
     public string Tabs { get; set; } = "top 3";
 
-    /// <summary>Parsed tab display: position (top/left/off), rows (top), peek ms (left; -1 = permanent).</summary>
+    /// <summary>Min/close buttons ride with the tabs panel instead of the top chrome.</summary>
+    public bool TitleButtonsInTabs { get; set; }
+
+    /// <summary>Parsed: position (top/bottom/left/right/off), rows (top/bottom),
+    /// peek ms (left/right; -1 = always shown).</summary>
     public (string Pos, int Rows, int PeekMs) TabsParsed
     {
         get
         {
             var t = (Tabs ?? "").Trim().ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (t.Length == 0) return ("top", 3, 0);
+            int Rows() => t.Length > 1 && int.TryParse(t[1], out var r) ? Math.Clamp(r, 1, 12) : 3;
+            int Peek() => t.Length > 1 && int.TryParse(t[1], out var ms) ? ms : -1;
             return t[0] switch
             {
-                "top" => ("top", t.Length > 1 && int.TryParse(t[1], out var r) ? Math.Clamp(r, 1, 12) : 3, 0),
-                "left" => ("left", 0, t.Length > 1 && int.TryParse(t[1], out var ms) ? ms : -1),
+                "top" => ("top", Rows(), 0),
+                "bottom" => ("bottom", Rows(), 0),
+                "left" => ("left", 0, Peek()),
+                "right" => ("right", 0, Peek()),
                 "on" => ("left", 0, -1),
                 "off" => ("off", 0, 0),
                 _ => ("top", 3, 0),
@@ -272,7 +280,8 @@ cert_path: ""             # legacy global .pfx (unused)
 cert_password: ""
 command_history_size: 200
 history_visible: 5        # history lines shown above the ":" line
-tabs: top 3               # top <rows> | left <ms> | on | off  (:showtabs)
+tabs: top 3               # tabs panel: top|bottom <rows> | left|right <peek-ms> | on | off  (:tabspanel)
+title_buttons_in_tabs: false  # false = min/close stay top-right; true = they ride with the tabs panel
 scroll_rows: 3
 
 # Text-box annotation defaults.

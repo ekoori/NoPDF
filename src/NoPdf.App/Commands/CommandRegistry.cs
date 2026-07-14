@@ -67,7 +67,8 @@ public sealed class CommandRegistry
             ["toolbar"] = (_, _) => { _main.ToggleToolbarCommand.Execute(null); return Msg(_main.IsToolbarVisible ? "Toolbar shown" : "Toolbar hidden"); },
             ["config"] = (_, _) => Config(),
             ["bind"] = Bind,
-            ["showtabs"] = (_, rest) => { _main.ShowTabs(rest); return Msg($"Tabs: {_main.Config.Tabs}"); },
+            ["tabspanel"] = (_, rest) => Msg(_main.ShowTabs(rest)),
+            ["showtabs"] = (_, rest) => Msg(_main.ShowTabs(rest)), // old name
             ["sign"] = Sign, ["signature"] = Sign,
             ["signatures"] = (_, _) => { _main.ToggleSignaturePanelCommand.Execute(null); return Msg(null); },
             ["siglist"] = (_, _) => Msg(ListSignatures()),

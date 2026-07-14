@@ -170,13 +170,38 @@
               x:Name="DragStrip" PointerPressed="OnDragStripPressed" DoubleTapped="OnDragStripDoubleTapped">
             <ScrollViewer Grid.Column="0" MaxHeight="{Binding TabsMaxHeight}"
                           VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                          IsVisible="{Binding IsTabsTop}" Padding="4,3">
+                          IsVisible="{Binding ShowTopTabs}" Padding="4,3">
                 <ItemsControl ItemsSource="{Binding Tabs}" ItemTemplate="{StaticResource TabChip}">
                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                 </ItemsControl>
             </ScrollViewer>
+            <!-- Window buttons stay in the top chrome unless configured to ride with the tabs. -->
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"
-                        IsVisible="{Binding IsTitlebarHidden}">
+                        IsVisible="{Binding ShowChromeButtons}">
+                <Button Classes="wbtn" ToolTip.Tip="Minimise" Command="{Binding MinimizeCommand}" Content="&#x2013;"/>
+                <Button Classes="wbtn wclose" ToolTip.Tip="Close" Command="{Binding QuitCommand}" Content="&#x2715;"/>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"
+                        IsVisible="{Binding ShowTabsButtons}" IsEnabled="{Binding ShowTopTabs}">
+                <Button Classes="wbtn" ToolTip.Tip="Minimise" Command="{Binding MinimizeCommand}"
+                        Content="&#x2013;" IsVisible="{Binding ShowTopTabs}"/>
+                <Button Classes="wbtn wclose" ToolTip.Tip="Close" Command="{Binding QuitCommand}"
+                        Content="&#x2715;" IsVisible="{Binding ShowTopTabs}"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- ===== Tabs panel: bottom ===== -->
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Background="{DynamicResource ChromeBackground}"
+              IsVisible="{Binding ShowBottomTabs}">
+            <ScrollViewer Grid.Column="0" MaxHeight="{Binding TabsMaxHeight}"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          Padding="4,3">
+                <ItemsControl ItemsSource="{Binding Tabs}" ItemTemplate="{StaticResource TabChip}">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </ScrollViewer>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                        IsVisible="{Binding ShowTabsButtons}">
                 <Button Classes="wbtn" ToolTip.Tip="Minimise" Command="{Binding MinimizeCommand}" Content="&#x2013;"/>
                 <Button Classes="wbtn wclose" ToolTip.Tip="Close" Command="{Binding QuitCommand}" Content="&#x2715;"/>
             </StackPanel>
@@ -318,15 +343,20 @@
         </Border>
 
         <!-- ===== Main area ===== -->
-        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
+        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
 
             <!-- Left tabs panel -->
             <Border Grid.Column="0" Classes="sidepanel" Width="190" Background="{DynamicResource ChromeBackground}"
                     BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,1,0"
                     IsVisible="{Binding ShowLeftTabs}">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Classes="muted" Text="TABS" FontSize="11" FontWeight="SemiBold"
-                               Margin="12,10,12,6"/>
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="12,10,4,6">
+                        <TextBlock Classes="muted" Text="TABS" FontSize="11" FontWeight="SemiBold"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" IsVisible="{Binding ShowTabsButtons}">
+                            <Button Classes="wbtn" ToolTip.Tip="Minimise" Command="{Binding MinimizeCommand}" Content="&#x2013;"/>
+                            <Button Classes="wbtn wclose" ToolTip.Tip="Close" Command="{Binding QuitCommand}" Content="&#x2715;"/>
+                        </StackPanel>
+                    </Grid>
                     <ScrollViewer>
                         <ItemsControl ItemsSource="{Binding Tabs}" ItemTemplate="{StaticResource TabChip}" Margin="4"/>
                     </ScrollViewer>
@@ -642,6 +672,24 @@
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- Right tabs panel -->
+            <Border Grid.Column="7" Classes="sidepanel" Width="190" Background="{DynamicResource ChromeBackground}"
+                    BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="1,0,0,0"
+                    IsVisible="{Binding ShowRightTabs}">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="12,10,4,6">
+                        <TextBlock Classes="muted" Text="TABS" FontSize="11" FontWeight="SemiBold"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" IsVisible="{Binding ShowTabsButtons}">
+                            <Button Classes="wbtn" ToolTip.Tip="Minimise" Command="{Binding MinimizeCommand}" Content="&#x2013;"/>
+                            <Button Classes="wbtn wclose" ToolTip.Tip="Close" Command="{Binding QuitCommand}" Content="&#x2715;"/>
+                        </StackPanel>
+                    </Grid>
+                    <ScrollViewer>
+                        <ItemsControl ItemsSource="{Binding Tabs}" ItemTemplate="{StaticResource TabChip}" Margin="4"/>
+                    </ScrollViewer>
                 </DockPanel>
             </Border>
         </Grid>

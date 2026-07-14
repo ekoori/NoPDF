@@ -30,14 +30,36 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool HasDocument => SelectedTab is not null;
     public bool IsTitlebarHidden => !Config.ShowTitlebar;
 
-    // ----- Tab display (top rows / left panel / off) -----
-    [ObservableProperty] private bool _isTabsTop;
+    // ----- Tabs panel (position around the view + visibility) -----
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(ShowTopTabs))] private bool _isTabsTop;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(ShowBottomTabs))] private bool _isTabsBottom;
     [ObservableProperty][NotifyPropertyChangedFor(nameof(ShowLeftTabs))] private bool _isTabsLeft;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(ShowRightTabs))] private bool _isTabsRight;
     [ObservableProperty] private double _tabsMaxHeight = 96;
-    [ObservableProperty][NotifyPropertyChangedFor(nameof(ShowLeftTabs))] private bool _leftTabsVisible;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(ShowLeftTabs))]
+    [NotifyPropertyChangedFor(nameof(ShowRightTabs))] private bool _leftTabsVisible;
+
+    /// <summary>Master on/off for the tabs panel (:tabspanel toggles it).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowTopTabs))][NotifyPropertyChangedFor(nameof(ShowBottomTabs))]
+    [NotifyPropertyChangedFor(nameof(ShowLeftTabs))][NotifyPropertyChangedFor(nameof(ShowRightTabs))]
+    private bool _tabsPanelVisible = true;
+
+    /// <summary>When set, the min/close buttons ride along with the tabs panel.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowChromeButtons))][NotifyPropertyChangedFor(nameof(ShowTabsButtons))]
+    private bool _titleButtonsInTabs;
+
     private int _peekToken;
 
-    public bool ShowLeftTabs => IsTabsLeft && LeftTabsVisible;
+    public bool ShowTopTabs => IsTabsTop && TabsPanelVisible;
+    public bool ShowBottomTabs => IsTabsBottom && TabsPanelVisible;
+    public bool ShowLeftTabs => IsTabsLeft && LeftTabsVisible && TabsPanelVisible;
+    public bool ShowRightTabs => IsTabsRight && LeftTabsVisible && TabsPanelVisible;
+
+    /// <summary>Window buttons in the top chrome (default) vs. in the tabs panel.</summary>
+    public bool ShowChromeButtons => IsTitlebarHidden && !TitleButtonsInTabs;
+    public bool ShowTabsButtons => IsTitlebarHidden && TitleButtonsInTabs;
 
     // ----- Signature presets -----
     [ObservableProperty] private bool _isSignaturePanelOpen;
@@ -234,22 +256,38 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         var (pos, rows, peek) = Config.TabsParsed;
         IsTabsTop = pos == "top";
+        IsTabsBottom = pos == "bottom";
         IsTabsLeft = pos == "left";
+        IsTabsRight = pos == "right";
         TabsMaxHeight = Math.Max(1, rows) * 30;
-        LeftTabsVisible = pos == "left" && peek < 0;
+        LeftTabsVisible = (pos == "left" || pos == "right") && peek < 0;
+        TitleButtonsInTabs = Config.TitleButtonsInTabs;
     }
 
-    public void ShowTabs(string arg)
+    /// <summary>`:tabspanel` with no args toggles the panel; otherwise sets its
+    /// position/rows, e.g. "top 3", "bottom 2", "left 500", "right", "on", "off".</summary>
+    public string ShowTabs(string arg)
     {
-        Config.Tabs = string.IsNullOrWhiteSpace(arg) ? "top 3" : arg.Trim();
+        arg = (arg ?? "").Trim();
+        if (arg.Length == 0)
+        {
+            TabsPanelVisible = !TabsPanelVisible;
+            return TabsPanelVisible ? "Tabs panel shown" : "Tabs panel hidden";
+        }
+        if (arg.Equals("on", StringComparison.OrdinalIgnoreCase)) { TabsPanelVisible = true; return "Tabs panel shown"; }
+        if (arg.Equals("off", StringComparison.OrdinalIgnoreCase)) { TabsPanelVisible = false; return "Tabs panel hidden"; }
+
+        Config.Tabs = arg;
         AppConfig.SetScalar("tabs", Config.Tabs);
+        TabsPanelVisible = true;
         ApplyTabsConfig();
+        return $"Tabs: {Config.Tabs}";
     }
 
     private void PeekLeftTabs()
     {
         var (pos, _, peek) = Config.TabsParsed;
-        if (pos != "left") return;
+        if (pos != "left" && pos != "right") return;
         if (peek < 0) { LeftTabsVisible = true; return; }
         if (peek == 0) return;
         LeftTabsVisible = true;
