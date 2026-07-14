@@ -223,7 +223,22 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
     // ----- Navigation -----
 
-    public int CurrentPage { get; private set; } = 1;
+    private int _currentPage = 1;
+
+    public int CurrentPage
+    {
+        get => _currentPage;
+        private set
+        {
+            if (_currentPage == value) return;
+            _currentPage = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(PageLabel));
+        }
+    }
+
+    /// <summary>"page / pages", shown in the status bar.</summary>
+    public string PageLabel => $"{CurrentPage} / {PageCount}";
 
     public bool GoToPage(int oneBased)
     {
@@ -743,7 +758,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         foreach (var item in newDoc.GetOutline()) Outline.Add(BookmarkNode.FromOutline(item));
         oldDoc?.Dispose();
         IsDirty = false;
-        OnPropertyChanged(nameof(PageCount));
+        OnPropertyChanged(nameof(PageCount)); OnPropertyChanged(nameof(PageLabel));
         OnPropertyChanged(nameof(HasOutline));
     }
 
@@ -814,7 +829,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
         oldDoc?.Dispose();
         MarkDirty();
-        OnPropertyChanged(nameof(PageCount));
+        OnPropertyChanged(nameof(PageCount)); OnPropertyChanged(nameof(PageLabel));
         CurrentPage = Math.Clamp(CurrentPage, 1, Math.Max(1, PageCount));
     }
 
@@ -877,7 +892,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
                 Thumbnails.Add(new PageThumbnail(this, i, newDoc.GetPageSize(i)));
             }
             oldDoc?.Dispose();
-            OnPropertyChanged(nameof(PageCount));
+            OnPropertyChanged(nameof(PageCount)); OnPropertyChanged(nameof(PageLabel));
         }
         else
         {

@@ -428,6 +428,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public async Task OpenPathAsync(string path, bool forceNewTab = false)
     {
+        // Normalise so the same file opened via dialog / drag-drop / command / the OS
+        // resolves to one identity (relative vs absolute, mixed separators, casing).
+        try { path = Path.GetFullPath(path); } catch { /* keep as given */ }
+
         // Reuse an already-open tab for the same file unless a new tab is forced.
         if (!forceNewTab)
         {

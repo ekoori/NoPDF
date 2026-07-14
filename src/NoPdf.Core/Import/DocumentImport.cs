@@ -22,6 +22,11 @@ public static class DocumentImport
         return e is ".cbz" or ".cbr" or ".cb7" or ".cbt" or ".djvu" or ".djv";
     }
 
+    /// <summary>True for any document noPDF can open (PDF or a convertible format).</summary>
+    public static bool IsSupportedDocument(string path)
+        => Path.GetExtension(path).Equals(".pdf", StringComparison.OrdinalIgnoreCase)
+           || IsSupportedNonPdf(path);
+
     /// <summary>PDF bytes for the file: comics/DjVu are converted; anything else is read as-is.</summary>
     public static byte[] ReadAsPdfBytes(string path)
     {

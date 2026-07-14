@@ -63,8 +63,8 @@ public partial class MainWindow : Window
         foreach (var f in files)
         {
             var path = f.TryGetLocalPath();
-            if (path is not null && path.EndsWith(".pdf", System.StringComparison.OrdinalIgnoreCase))
-                await Vm.OpenPathAsync(path, forceNewTab: true);
+            if (path is not null && NoPdf.Core.Import.DocumentImport.IsSupportedDocument(path))
+                await Vm.OpenPathAsync(path); // focus it if it's already open
         }
     }
 
@@ -231,7 +231,16 @@ public partial class MainWindow : Window
             {
                 case KeyFeedKind.Execute:
                     Vm.HideWhichKey(); e.Handled = true;
-                    await RunCommand(result.Command!);
+                    // A binding whose value starts with ':' pre-fills the command line
+                    // instead of running (e.g. o: ":open" → type args, then Enter).
+                    var bound = result.Command!;
+                    if (bound.StartsWith(':'))
+                    {
+                        Vm.KeyBindings.Reset();
+                        Vm.CommandBar.Open(":", bound[1..].TrimStart() + " ");
+                        return;
+                    }
+                    await RunCommand(bound);
                     return;
                 case KeyFeedKind.Pending:
                     Vm.ShowWhichKey(result.Candidates); e.Handled = true; return;

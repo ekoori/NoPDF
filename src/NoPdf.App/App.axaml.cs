@@ -37,7 +37,7 @@ public partial class App : Application
             // otherwise restore the previous session's tabs.
             var args = desktop.Args ?? System.Array.Empty<string>();
             var pdfs = args.Where(a => File.Exists(a) &&
-                                       a.EndsWith(".pdf", System.StringComparison.OrdinalIgnoreCase))
+                                       NoPdf.Core.Import.DocumentImport.IsSupportedDocument(a))
                            .ToArray();
             if (window.DataContext is MainWindowViewModel vm)
             {
@@ -45,7 +45,8 @@ public partial class App : Application
                 {
                     // Always restore the last session, then add any file passed on launch.
                     await vm.RestoreSessionAsync();
-                    foreach (var p in pdfs) await vm.OpenPathAsync(p, forceNewTab: true);
+                    // Focus the tab if the restored session already has this file.
+                    foreach (var p in pdfs) await vm.OpenPathAsync(p);
                 });
 
                 // Secondary launches forward their files here.
@@ -56,8 +57,8 @@ public partial class App : Application
                     if (window.WindowState == Avalonia.Controls.WindowState.Minimized)
                         window.WindowState = Avalonia.Controls.WindowState.Normal;
                     foreach (var p in paths)
-                        if (File.Exists(p) && p.EndsWith(".pdf", System.StringComparison.OrdinalIgnoreCase))
-                            await vm.OpenPathAsync(p, forceNewTab: true);
+                        if (File.Exists(p) && NoPdf.Core.Import.DocumentImport.IsSupportedDocument(p))
+                            await vm.OpenPathAsync(p); // focus it if it's already open
                 }));
             }
         }

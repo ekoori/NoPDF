@@ -285,7 +285,14 @@
         <!-- ===== Status bar (very bottom) ===== -->
         <Border DockPanel.Dock="Bottom" Background="{DynamicResource ChromeBackground}" BorderBrush="{DynamicResource ChromeBorder}"
                 BorderThickness="0,1,0,0" Padding="10,3">
-            <TextBlock Text="{Binding StatusText}" FontSize="12" Foreground="{DynamicResource StatusForeground}"/>
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{Binding StatusText}" FontSize="12"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource StatusForeground}"/>
+                <TextBlock Grid.Column="1" Text="{Binding SelectedTab.PageLabel}" FontSize="12"
+                           Margin="12,0,0,0" Foreground="{DynamicResource StatusForeground}"
+                           IsVisible="{Binding HasDocument}"/>
+            </Grid>
         </Border>
 
         <!-- ===== Command bar (above status bar) ===== -->
