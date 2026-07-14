@@ -26,6 +26,7 @@ public partial class MainWindow : Window
             OpenSingleFilePicker = PickSinglePdfAsync,
             OpenCertFilePicker = PickCertAsync,
             SaveAsPicker = PickSaveAsAsync,
+            PrintDialogPicker = ShowPrintDialogAsync,
             CopyHandler = CopySelectionAsync,
             CopyTextHandler = CopyTextAsync,
         };
@@ -393,6 +394,14 @@ public partial class MainWindow : Window
     {
         if ((sender as Control)?.DataContext is AnnotationListItem item)
             Vm.SelectedTab?.SelectAnnotationItemCommand.Execute(item);
+    }
+
+    private async Task<Views.PrintDialog.Result?> ShowPrintDialogAsync(
+        NoPdf.App.Printing.PrintOptions defaults, string range)
+    {
+        var dlg = new Views.PrintDialog();
+        dlg.Init(defaults, range);
+        return await dlg.ShowDialog<Views.PrintDialog.Result?>(this);
     }
 
     private async Task<string?> PickCertAsync()

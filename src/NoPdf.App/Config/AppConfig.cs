@@ -47,6 +47,15 @@ public sealed class AppConfig
     /// <summary>How long a cached copy of unsaved edits is kept, in hours (0 = forever).</summary>
     public int AutosaveExpiryHours { get; set; } = 24;
 
+    // ----- Printing defaults (used by :print; :printdialog can save back into these) -----
+    /// <summary>Printer name; blank = the system default.</summary>
+    public string PrintPrinter { get; set; } = "";
+    public int PrintCopies { get; set; } = 1;
+    /// <summary>Scale pages to fill the paper instead of printing at 100%.</summary>
+    public bool PrintFitToPage { get; set; } = true;
+    public bool PrintGrayscale { get; set; }
+    public bool PrintLandscape { get; set; }
+
     /// <summary>Parsed: position (top/bottom/left/right/off), rows (top/bottom),
     /// peek ms (left/right; -1 = always shown).</summary>
     public (string Pos, int Rows, int PeekMs) TabsParsed
@@ -247,6 +256,13 @@ tabs: top 3               # tabs panel: top|bottom <rows> | left|right <peek-ms>
 title_buttons_in_tabs: false  # false = min/close stay top-right; true = they ride with the tabs panel
 autosave_minutes: 5       # cache unsaved edits every N minutes (0 = only on exit)
 autosave_expiry_hours: 24 # discard cached unsaved edits after N hours (0 = keep forever)
+
+# Printing defaults used by :print (":printdialog" can write these back for you).
+print_printer: ""         # blank = the system default printer
+print_copies: 1
+print_fit_to_page: true   # scale pages to fill the paper
+print_grayscale: false
+print_landscape: false
 scroll_rows: 3
 
 # Text-box annotation defaults.

@@ -101,6 +101,64 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// <summary>Drops a file's cached edits (it now matches what's on disk).</summary>
     public void ClearAutosave(string path) => _autosave.Remove(path);
 
+    // ----- Printing -----
+
+    /// <summary>Set by the view; shows the print dialog and returns the chosen options.</summary>
+    public Func<Printing.PrintOptions, string, Task<Views.PrintDialog.Result?>>? PrintDialogPicker { get; set; }
+
+    /// <summary>The print options configured in config.yaml.</summary>
+    public Printing.PrintOptions PrintDefaults() => new()
+    {
+        Printer = Config.PrintPrinter,
+        Copies = Config.PrintCopies,
+        FitToPage = Config.PrintFitToPage,
+        Grayscale = Config.PrintGrayscale,
+        Landscape = Config.PrintLandscape,
+    };
+
+    /// <summary>Prints the current document. <paramref name="range"/> blank = all pages.</summary>
+    public string PrintNow(string range, Printing.PrintOptions opts, IReadOnlyList<int>? pages)
+    {
+        var doc = SelectedTab;
+        if (doc is null) return "No document";
+        if (!Printing.PrintService.IsSupported) return "Printing is only supported on Windows";
+        try
+        {
+            opts.Pages = pages ?? (string.IsNullOrWhiteSpace(range)
+                ? null
+                : NoPdf.Core.Editing.PageOps.ParseRange(range, doc.PageCount).ToList());
+            var bytes = doc.ExportWithAnnotations();   // print what's on screen, annotations included
+#pragma warning disable CA1416 // guarded by PrintService.IsSupported
+            Printing.PrintService.Print(bytes, opts);
+#pragma warning restore CA1416
+            string where = string.IsNullOrWhiteSpace(opts.Printer) ? "the default printer" : opts.Printer;
+            return $"Sent {(opts.Pages is null || opts.Pages.Count == 0 ? doc.PageCount : opts.Pages.Count)} page(s) to {where}";
+        }
+        catch (Exception ex) { return "Print failed: " + ex.Message; }
+    }
+
+    public async Task<string?> ShowPrintDialog(string range)
+    {
+        if (PrintDialogPicker is null) return "Print dialog unavailable";
+        var result = await PrintDialogPicker(PrintDefaults(), range);
+        if (result is null) return "Cancelled";
+
+        if (result.SaveAsDefault)
+        {
+            Config.PrintPrinter = result.Options.Printer;
+            Config.PrintCopies = result.Options.Copies;
+            Config.PrintFitToPage = result.Options.FitToPage;
+            Config.PrintGrayscale = result.Options.Grayscale;
+            Config.PrintLandscape = result.Options.Landscape;
+            AppConfig.SetScalar("print_printer", $"\"{result.Options.Printer}\"");
+            AppConfig.SetScalar("print_copies", result.Options.Copies.ToString());
+            AppConfig.SetScalar("print_fit_to_page", result.Options.FitToPage ? "true" : "false");
+            AppConfig.SetScalar("print_grayscale", result.Options.Grayscale ? "true" : "false");
+            AppConfig.SetScalar("print_landscape", result.Options.Landscape ? "true" : "false");
+        }
+        return PrintNow(result.Range, result.Options, null);
+    }
+
     // ----- Signature presets -----
     [ObservableProperty] private bool _isSignaturePanelOpen;
     [ObservableProperty] private SignaturePreset? _selectedSignaturePreset;

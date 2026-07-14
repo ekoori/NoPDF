@@ -1,0 +1,40 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="NoPdf.App.Views.PrintDialog"
+        Title="Print" Width="420" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" CanResize="False"
+        Background="{DynamicResource PanelBackground}">
+    <StackPanel Margin="16" Spacing="10">
+        <StackPanel Spacing="4">
+            <TextBlock Text="Printer" FontSize="11" Opacity="0.7"/>
+            <ComboBox x:Name="PrinterBox" HorizontalAlignment="Stretch"/>
+        </StackPanel>
+
+        <Grid ColumnDefinitions="*,12,*">
+            <StackPanel Grid.Column="0" Spacing="4">
+                <TextBlock Text="Copies" FontSize="11" Opacity="0.7"/>
+                <NumericUpDown x:Name="CopiesBox" Minimum="1" Maximum="99" Increment="1" Value="1"
+                               FormatString="0"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="4">
+                <TextBlock Text="Pages (e.g. 1-5,8; blank = all)" FontSize="11" Opacity="0.7"/>
+                <TextBox x:Name="RangeBox" Watermark="all"/>
+            </StackPanel>
+        </Grid>
+
+        <CheckBox x:Name="FitBox" Content="Fit to page" IsChecked="True"/>
+        <CheckBox x:Name="GrayBox" Content="Grayscale"/>
+        <CheckBox x:Name="LandscapeBox" Content="Landscape"/>
+
+        <Border BorderBrush="{DynamicResource PanelBorder}" BorderThickness="0,1,0,0" Padding="0,10,0,0">
+            <StackPanel Spacing="10">
+                <CheckBox x:Name="DefaultBox"
+                          Content="Save these as the defaults for :print"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                    <Button Content="Cancel" Click="OnCancel" MinWidth="80"/>
+                    <Button Content="Print" Click="OnPrint" MinWidth="80" IsDefault="True"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</Window>

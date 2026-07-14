@@ -54,6 +54,7 @@ public sealed class CommandRegistry
             ["findprev"] = (_, _) => Task.FromResult(FindStep(-1)), ["N"] = (_, _) => Task.FromResult(FindStep(-1)),
             ["highlight"] = Highlight, ["hl"] = Highlight,
             ["print"] = Print,
+            ["printdialog"] = PrintDialogCmd,
             ["save"] = Save, ["w"] = Save,
             ["saveas"] = SaveAs,
             ["close"] = Close, ["q"] = Close,
@@ -322,23 +323,16 @@ public sealed class CommandRegistry
         return tool.ToString();
     }
 
-    private async Task<string?> Print(string[] args, string rest)
-    {
-        var doc = Doc;
-        if (doc is null) return "No document";
-        string spec = string.IsNullOrWhiteSpace(rest) ? $"1-{doc.PageCount}" : rest;
-        string temp = Path.Combine(Path.GetTempPath(), $"nopdf_print_{Guid.NewGuid():N}.pdf");
-        await Task.Run(() => doc.ExtractRange(spec, temp));
+    /// <summary>Prints straight away using the defaults from the config.</summary>
+    private Task<string?> Print(string[] args, string rest)
+        => Msg(_main.PrintNow(rest, _main.PrintDefaults(), null));
 
-        try
-        {
-            Process.Start(new ProcessStartInfo(temp) { Verb = "print", UseShellExecute = true });
-            return "Printing…";
-        }
-        catch (Exception ex)
-        {
-            return $"Exported to {temp} (print failed: {ex.Message})";
-        }
+    /// <summary>Shows the print dialog, optionally saving the chosen options as defaults.</summary>
+    private async Task<string?> PrintDialogCmd(string[] args, string rest)
+    {
+        if (Doc is null) return "No document";
+        if (!NoPdf.App.Printing.PrintService.IsSupported) return "Printing is only supported on Windows";
+        return await _main.ShowPrintDialog(rest);
     }
 
     private string? TogglePages()
