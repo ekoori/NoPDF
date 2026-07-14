@@ -266,26 +266,48 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         foreach (var p in window) VisiblePages.Add(p);
     }
 
-    /// <summary>Zooms to satisfy the current view mode within the viewport.</summary>
+    // Layout constants shared with DocumentView so the fitted zoom and the panel's
+    // slot size agree — if they disagree the panel wraps and the next page bleeds in.
+    public const double ListPadding = 48;      // ListBox Padding="24" both sides
+    public const double ItemExtraW = 2;        // page border
+    public const double ItemExtraH = 20;       // page border + 18px bottom margin
+    public const double ScrollbarReserve = 18; // space the scrollbar will claim once shown
+
+    /// <summary>Width of one page slot (columns across).</summary>
+    public double SlotWidth(double viewportWidth)
+    {
+        double avail = viewportWidth - ListPadding
+            - (ViewMode == PageViewMode.Scroll && PagesPerRow > 1 ? ScrollbarReserve : 0);
+        return Math.Max(1, avail / Math.Max(1, PagesPerRow));
+    }
+
+    /// <summary>Height of one page slot (rows down, horizontal-scroll mode).</summary>
+    public double SlotHeight(double viewportHeight)
+        => Math.Max(1, (viewportHeight - ListPadding - ScrollbarReserve) / Math.Max(1, PagesPerRow));
+
+    /// <summary>Zooms so the pages exactly fill their slots for the current view mode.</summary>
     public void FitForView(double viewportWidth, double viewportHeight)
     {
         var page = Pages.Count >= CurrentPage && CurrentPage >= 1 ? Pages[CurrentPage - 1] : Pages.FirstOrDefault();
         if (page is null) return;
-        int n = Math.Max(1, PagesPerRow);
-        double padding = 48, gap = 10 * (n - 1);
         double pw = page.PointWidth * DipsPerPoint, ph = page.PointHeight * DipsPerPoint;
+        if (pw <= 0 || ph <= 0) return;
+
         double z = ViewMode switch
         {
-            // n rows must fit the viewport height; pages flow into columns rightwards.
-            PageViewMode.ScrollH => (viewportHeight - padding - gap) / (n * ph),
-            // n pages across AND the whole row visible: a full "page" per screen.
-            PageViewMode.Full => Math.Min((viewportWidth - padding - gap) / (n * pw), (viewportHeight - padding) / ph),
-            // n pages across, scrolling vertically.
-            _ => (viewportWidth - padding - gap) / (n * pw),
+            // N rows fill the height; pages flow down a column then to the next column.
+            PageViewMode.ScrollH => (SlotHeight(viewportHeight) - ItemExtraH) / ph,
+            // N pages across AND the row fully visible — a whole screen per "page".
+            PageViewMode.Full => Math.Min(
+                (SlotWidth(viewportWidth) - ItemExtraW) / pw,
+                (viewportHeight - ListPadding - ItemExtraH) / ph),
+            // N across, scrolling vertically.
+            _ => (SlotWidth(viewportWidth) - ItemExtraW) / pw,
         };
         int keep = CurrentPage;
         SetZoom(z);
-        ScrollToPageRequested?.Invoke(Math.Clamp(keep - 1, 0, Math.Max(0, PageCount - 1)));
+        if (ViewMode != PageViewMode.Full)
+            ScrollToPageRequested?.Invoke(Math.Clamp(keep - 1, 0, Math.Max(0, PageCount - 1)));
     }
 
     // ----- Navigation -----

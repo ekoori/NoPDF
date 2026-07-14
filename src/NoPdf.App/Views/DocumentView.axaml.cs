@@ -30,6 +30,13 @@ public partial class DocumentView : UserControl
         PageList.AddHandler(PointerMovedEvent, OnPointerMoved, RoutingStrategies.Tunnel);
         PageList.AddHandler(PointerReleasedEvent, OnPointerReleased, RoutingStrategies.Tunnel);
         PageList.AddHandler(PointerWheelChangedEvent, OnPointerWheel, RoutingStrategies.Tunnel);
+
+        // Slot sizes are derived from the viewport, so a resize needs a re-layout+refit.
+        PageList.SizeChanged += (_, _) =>
+        {
+            if (_vm is null) return;
+            if (_vm.ViewMode != PageViewMode.Scroll || _vm.PagesPerRow > 1) OnViewModeChanged();
+        };
     }
 
     private void OnScrollBy(double dx, double dy)
@@ -38,6 +45,14 @@ public partial class DocumentView : UserControl
         if (sv is null) return;
         double maxX = Math.Max(0, sv.Extent.Width - sv.Viewport.Width);
         double maxY = Math.Max(0, sv.Extent.Height - sv.Viewport.Height);
+
+        // Full view shows whole page(s): with nothing to scroll to, scrolling turns pages.
+        if (_vm is { ViewMode: PageViewMode.Full } && dy != 0 && maxY <= 1)
+        {
+            _vm.GoToPage(_vm.CurrentPage + (dy > 0 ? 1 : -1) * Math.Max(1, _vm.PagesPerRow));
+            return;
+        }
+
         sv.Offset = new Vector(
             Math.Clamp(sv.Offset.X + dx, 0, maxX),
             Math.Clamp(sv.Offset.Y + dy, 0, maxY));
@@ -181,6 +196,11 @@ public partial class DocumentView : UserControl
             return p;
         });
 
+    /// <summary>Exactly N columns in a single row — cannot wrap, so zooming can never
+    /// push a page onto a second row where it would peek into view.</summary>
+    private static Avalonia.Controls.Templates.FuncTemplate<Panel?> RowTemplate(int columns)
+        => new(() => new UniformGrid { Rows = 1, Columns = Math.Max(1, columns) });
+
     private void OnViewModeChanged()
     {
         if (_vm is null) return;
@@ -192,24 +212,25 @@ public partial class DocumentView : UserControl
         {
             case PageViewMode.ScrollH:
                 // Pages fill a column top-to-bottom then wrap rightwards → horizontal scroll.
-                // A fixed slot height is what forces exactly n rows.
+                // The fixed slot height is what pins it to exactly n rows.
                 PageList.ItemsPanel = WrapTemplate(Avalonia.Layout.Orientation.Vertical, 0,
-                    vp0.Height > 0 ? vp0.Height / n : 0);
+                    vp0.Height > 0 ? _vm.SlotHeight(vp0.Height) : 0);
                 ScrollViewer.SetVerticalScrollBarVisibility(PageList, ScrollBarVisibility.Disabled);
                 ScrollViewer.SetHorizontalScrollBarVisibility(PageList, ScrollBarVisibility.Auto);
                 break;
             case PageViewMode.Full:
-                // Only the focused page(s) are in the list, so nothing scrolls.
-                PageList.ItemsPanel = WrapTemplate(Avalonia.Layout.Orientation.Horizontal,
-                    vp0.Width > 0 ? vp0.Width / n : 0, 0);
-                ScrollViewer.SetHorizontalScrollBarVisibility(PageList, ScrollBarVisibility.Disabled);
-                ScrollViewer.SetVerticalScrollBarVisibility(PageList, ScrollBarVisibility.Disabled);
+                // Only the focused page(s) are in the list and a UniformGrid keeps them on
+                // one row, so no other page can appear no matter the zoom. Scrollbars stay
+                // available for panning around a zoomed-in page.
+                PageList.ItemsPanel = RowTemplate(n);
+                ScrollViewer.SetHorizontalScrollBarVisibility(PageList, ScrollBarVisibility.Auto);
+                ScrollViewer.SetVerticalScrollBarVisibility(PageList, ScrollBarVisibility.Auto);
                 break;
             case PageViewMode.Scroll when n > 1:
                 // Horizontal scrolling must be OFF or the wrap panel gets infinite width
                 // and lays every page out in one endless row instead of wrapping.
                 PageList.ItemsPanel = WrapTemplate(Avalonia.Layout.Orientation.Horizontal,
-                    vp0.Width > 0 ? vp0.Width / n : 0, 0);
+                    vp0.Width > 0 ? _vm.SlotWidth(vp0.Width) : 0, 0);
                 ScrollViewer.SetHorizontalScrollBarVisibility(PageList, ScrollBarVisibility.Disabled);
                 ScrollViewer.SetVerticalScrollBarVisibility(PageList, ScrollBarVisibility.Auto);
                 break;

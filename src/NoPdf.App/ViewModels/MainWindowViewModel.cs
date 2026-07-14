@@ -31,7 +31,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool IsTitlebarHidden => !Config.ShowTitlebar;
 
     // ----- Tabs panel (position around the view + visibility) -----
-    [ObservableProperty][NotifyPropertyChangedFor(nameof(ShowTopTabs))] private bool _isTabsTop;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(ShowTopTabs))][NotifyPropertyChangedFor(nameof(ShowTopBar))] private bool _isTabsTop;
     [ObservableProperty][NotifyPropertyChangedFor(nameof(ShowBottomTabs))] private bool _isTabsBottom;
     [ObservableProperty][NotifyPropertyChangedFor(nameof(ShowLeftTabs))] private bool _isTabsLeft;
     [ObservableProperty][NotifyPropertyChangedFor(nameof(ShowRightTabs))] private bool _isTabsRight;
@@ -43,11 +43,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowTopTabs))][NotifyPropertyChangedFor(nameof(ShowBottomTabs))]
     [NotifyPropertyChangedFor(nameof(ShowLeftTabs))][NotifyPropertyChangedFor(nameof(ShowRightTabs))]
+    [NotifyPropertyChangedFor(nameof(ShowTopBar))]
     private bool _tabsPanelVisible = true;
 
     /// <summary>When set, the min/close buttons ride along with the tabs panel.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowChromeButtons))][NotifyPropertyChangedFor(nameof(ShowTabsButtons))]
+    [NotifyPropertyChangedFor(nameof(ShowTopBar))]
     private bool _titleButtonsInTabs;
 
     private int _peekToken;
@@ -60,6 +62,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// <summary>Window buttons in the top chrome (default) vs. in the tabs panel.</summary>
     public bool ShowChromeButtons => IsTitlebarHidden && !TitleButtonsInTabs;
     public bool ShowTabsButtons => IsTitlebarHidden && TitleButtonsInTabs;
+
+    /// <summary>The top strip only exists for the tabs or the window buttons — with the
+    /// tabs elsewhere and the buttons riding along, it would just waste a row.</summary>
+    public bool ShowTopBar => ShowTopTabs || ShowChromeButtons;
 
     // ----- Autosave (unsaved edits cached to temp) -----
     private readonly AutosaveStore _autosave = new();
@@ -712,6 +718,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsTitlebarHidden));
         OnPropertyChanged(nameof(ShowChromeButtons));
         OnPropertyChanged(nameof(ShowTabsButtons));
+        OnPropertyChanged(nameof(ShowTopBar));
         StartAutosaveTimer(); // interval may have changed
         ConfigApplied?.Invoke(cfg);
         StatusText = err ?? "Config reloaded";

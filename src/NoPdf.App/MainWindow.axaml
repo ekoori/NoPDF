@@ -167,7 +167,8 @@
 
         <!-- ===== Top bar: tabs (top mode) + window buttons; drag region ===== -->
         <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Background="{DynamicResource ChromeBackground}"
-              x:Name="DragStrip" PointerPressed="OnDragStripPressed" DoubleTapped="OnDragStripDoubleTapped">
+              x:Name="DragStrip" PointerPressed="OnDragStripPressed" DoubleTapped="OnDragStripDoubleTapped"
+              IsVisible="{Binding ShowTopBar}">
             <ScrollViewer Grid.Column="0" MaxHeight="{Binding TabsMaxHeight}"
                           VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                           IsVisible="{Binding ShowTopTabs}" Padding="4,3">
@@ -326,7 +327,9 @@
         </Border>
 
         <!-- ===== Tabs panel: bottom (docked last so it sits above the status/command bars) ===== -->
+        <!-- Doubles as a window drag region, since the top strip may be gone entirely. -->
         <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Background="{DynamicResource ChromeBackground}"
+              PointerPressed="OnDragStripPressed" DoubleTapped="OnDragStripDoubleTapped"
               IsVisible="{Binding ShowBottomTabs}">
             <ScrollViewer Grid.Column="0" MaxHeight="{Binding TabsMaxHeight}"
                           VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
@@ -350,7 +353,9 @@
                     BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,1,0"
                     IsVisible="{Binding ShowLeftTabs}">
                 <DockPanel>
-                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="12,10,4,6">
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="12,10,4,6"
+                          Background="Transparent"
+                          PointerPressed="OnDragStripPressed" DoubleTapped="OnDragStripDoubleTapped">
                         <TextBlock Classes="muted" Text="TABS" FontSize="11" FontWeight="SemiBold"/>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" IsVisible="{Binding ShowTabsButtons}">
                             <Button Classes="wbtn" ToolTip.Tip="Minimise" Command="{Binding MinimizeCommand}" Content="&#x2013;"/>
@@ -680,7 +685,9 @@
                     BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="1,0,0,0"
                     IsVisible="{Binding ShowRightTabs}">
                 <DockPanel>
-                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="12,10,4,6">
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="12,10,4,6"
+                          Background="Transparent"
+                          PointerPressed="OnDragStripPressed" DoubleTapped="OnDragStripDoubleTapped">
                         <TextBlock Classes="muted" Text="TABS" FontSize="11" FontWeight="SemiBold"/>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" IsVisible="{Binding ShowTabsButtons}">
                             <Button Classes="wbtn" ToolTip.Tip="Minimise" Command="{Binding MinimizeCommand}" Content="&#x2013;"/>
