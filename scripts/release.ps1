@@ -93,10 +93,17 @@ foreach ($t in $targets) {
     $rid = $t.rid
     Write-Host "  publishing $rid ..." -ForegroundColor Yellow
     # RevSuppress: YY was set above, so all platforms share this one version.
+    # Keep the log so a failure is diagnosable instead of vanishing into Out-Null.
+    $log = Join-Path $env:TEMP "nopdf-publish-$rid.log"
     dotnet publish $proj -c Release -r $rid --self-contained true `
         -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
-        -p:DebugType=none -p:DebugSymbols=false -p:RevSuppress=true 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $rid" }
+        -p:DebugType=none -p:DebugSymbols=false -p:RevSuppress=true 2>&1 |
+        Out-File -FilePath $log -Encoding utf8
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "--- last lines of $log ---" -ForegroundColor Red
+        Get-Content $log -Tail 15 | ForEach-Object { Write-Host "    $_" }
+        throw "dotnet publish failed for $rid (see $log)"
+    }
 
     $src = Join-Path $root "src\NoPdf.App\bin\Release\net10.0\$rid\publish\NoPdf.App$($t.ext)"
     $dst = Join-Path $outDir "noPDF-$verTag-$rid$($t.ext)"
