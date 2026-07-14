@@ -109,7 +109,7 @@ public sealed class CommandRegistry
             ["marks"] = (_, _) => Task.FromResult(OpenMarks()),
             ["hint"] = (_, _) => Msg(Doc is null ? "No document" : (Doc.EnterHintMode() ? null : "No links on screen")),
             ["follow"] = (_, _) => Msg(Doc is null ? "No document" : (Doc.EnterHintMode() ? null : "No links on screen")),
-            ["help"] = (_, _) => Task.FromResult<string?>("Commands: " + string.Join(", ", CommandNames())),
+            ["help"] = (_, _) => Help(),
             ["version"] = (_, _) => Task.FromResult<string?>(NoPdf.App.AppVersion.Display),
         };
         // Register tool commands.
@@ -574,6 +574,42 @@ public sealed class CommandRegistry
         if (_quickmarks.All.Count == 0) return "No quickmarks";
         _main.CommandBar.OpenWithSuggestions(":", _quickmarks.All.Select(kv => $"o {kv.Value}"));
         return null;
+    }
+
+    /// <summary>Builds a help PDF (commands + hotkeys) and opens it in a tab.</summary>
+    private async Task<string?> Help()
+    {
+        var lines = new List<NoPdf.Core.Import.TextDocument.Line>
+        {
+            new("Press ':' for the command line, '/' to search, 'f' to follow links.", false),
+            new("", false),
+            new("Commands", true),
+        };
+        foreach (var name in CommandNames())
+            lines.Add(new(UsageText.TryGetValue(name, out var u) ? "  " + u : "  " + name));
+
+        lines.Add(new("", false));
+        lines.Add(new("Hotkeys", true));
+        foreach (var kv in _main.Config.NormalBindings.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+            lines.Add(new($"  {kv.Key,-12} {kv.Value}"));
+
+        if (_main.Config.Aliases.Count > 0)
+        {
+            lines.Add(new("", false));
+            lines.Add(new("Aliases", true));
+            foreach (var kv in _main.Config.Aliases.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+                lines.Add(new($"  {kv.Key,-12} {kv.Value}"));
+        }
+
+        try
+        {
+            var bytes = NoPdf.Core.Import.TextDocument.Build($"noPDF {NoPdf.App.AppVersion.Informational} — help", lines);
+            string path = Path.Combine(Path.GetTempPath(), "noPDF-help.pdf");
+            await File.WriteAllBytesAsync(path, bytes);
+            await _main.OpenPathAsync(path);  // reuses the tab if help is already open
+            return null;
+        }
+        catch (Exception ex) { return "Help failed: " + ex.Message; }
     }
 
     // ----- Usage hints (shown in the status bar as a command word is typed) -----
