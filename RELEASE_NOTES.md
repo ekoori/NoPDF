@@ -1,11 +1,26 @@
 # noPDF release notes
 
 Version scheme `v0.0.X-beta.YY`: **X** is the public release line, **YY** the
-local build number (auto-incremented on every Debug build). Public releases are
-cut with `scripts/release.ps1 -Publish`, which bumps **X**, resets **YY** to `00`,
-and publishes `v0.0.X-beta.00` to GitHub. Newest first.
+local build number (raised on every non-debug build). Public releases are cut with
+`scripts/release.ps1 -Publish`, which bumps **X**, resets **YY** to `00`, and
+publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
 ## Unreleased (0.0.2 line)
+
+Printing:
+- **`:print` actually prints.** It used to hand the PDF to the default handler's
+  "print" verb — which is noPDF itself — so it always failed. Pages are now
+  rasterised and sent to the printer, annotations included. Windows only.
+- Defaults live in the config (`print_printer`, `print_copies`, `print_fit_to_page`,
+  `print_grayscale`, `print_landscape`); **`:printdialog`** picks them per-print and
+  can save the choices back as the `:print` defaults.
+
+Commands & docs:
+- One command catalogue now drives **`:help`** (a landscape table per menu group:
+  Command / Aliases / Keys / Description), the **config file's comments**, and the
+  status-bar usage hint — so they can't drift apart.
+- `:open "path with spaces"` works, and `:open` loads into the current tab.
+- `:copypath` reports the path it copied.
 
 Session & recovery:
 - **Autosave**: unsaved edits are cached to `%AppData%/NoPdf/autosave` every
@@ -33,7 +48,11 @@ Formats & view:
 - Open **CBZ/CBR/CB7/CBT** comic archives and **DjVu** documents (converted to PDF on
   load; DjVu needs DjVuLibre's `ddjvu` on PATH).
 - **View modes**: `:view scroll [X]` (vertical scroll, X across), `:view full [X]`
-  (X whole pages fill the viewport) and `:view scrollh [X]` (horizontal scroll, X rows).
+  (only the X page(s) in focus fill the viewport — no other page can appear, at any
+  zoom; scrolling turns pages) and `:view scrollh [X]` (horizontal scroll, X rows,
+  filling each column downwards).
+- The tabs panel can sit top/bottom/left/right, and the top bar collapses when it
+  would otherwise be an empty strip (`title_buttons_in_tabs: true`).
 - **Annotations panel** (`:annots`) listing every annotation; click to jump to it.
 
 Editing & selection:
