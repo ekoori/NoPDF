@@ -60,6 +60,10 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public Action<double, double, double>? ViewStateSink { get; set; }
     public void ReportViewState(double zoom, double ox, double oy) => ViewStateSink?.Invoke(zoom, ox, oy);
 
+    /// <summary>Set by the host to persist the `:view` mode as it changes. Assigned after
+    /// any restore, so restoring a mode doesn't write it straight back.</summary>
+    public Action<string, int>? ViewModeSink { get; set; }
+
     /// <summary>Raised when a certified signature stamp is committed, to run the signing flow.</summary>
     public Action<SignatureAnnotation>? CertifyRequested { get; set; }
 
@@ -237,6 +241,14 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(PageMargin));
     }
 
+    /// <summary>The name `:view` uses for a mode; also what gets persisted per file.</summary>
+    public static string ModeName(PageViewMode m) => m switch
+    {
+        PageViewMode.Full => "full",
+        PageViewMode.ScrollH => "scrollh",
+        _ => "scroll",
+    };
+
     public string SetView(string mode, int? count)
     {
         var m = mode.ToLowerInvariant() switch
@@ -250,6 +262,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         PagesPerRow = n;
         RefreshVisiblePages();
         ViewModeChanged?.Invoke();
+        ViewModeSink?.Invoke(ModeName(m), n);
         return m switch
         {
             PageViewMode.Full => $"Full view, {n} page(s) in the viewport",
@@ -472,23 +485,63 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         RefreshAnnotationList();
     }
 
-    /// <summary>Rebuilds the flat annotation list (call when annotations are added/removed).</summary>
+    /// <summary>Rebuilds the annotation list (call when annotations are added/removed).
+    /// Groups become a header row with their members nested underneath.</summary>
     public void RefreshAnnotationList()
     {
         AnnotationList.Clear();
-        foreach (var p in Pages)
-            foreach (var a in p.Annotations)
-                AnnotationList.Add(new AnnotationListItem(a, p.PageNumber, _selected.Contains(a)));
+        EmitAnnotationRows(AllAnnotations().ToList(), depth: 0);
+    }
+
+    /// <summary>The group id <paramref name="depth"/> levels in from the outside, or null
+    /// when the annotation is not grouped that deeply (GroupPath is innermost-first).</summary>
+    private static Guid? GroupIdAt(PdfAnnotationModel a, int depth)
+    {
+        int i = a.GroupPath.Count - 1 - depth;
+        return i >= 0 ? a.GroupPath[i] : null;
+    }
+
+    private void EmitAnnotationRows(IReadOnlyList<PdfAnnotationModel> annotations, int depth)
+    {
+        // Bucket by group at this level, keeping document order: a group takes the place
+        // of its first member, and loose annotations stay where they are.
+        var buckets = new List<(Guid? Key, List<PdfAnnotationModel> Items)>();
+        var seen = new Dictionary<Guid, int>();
+        foreach (var a in annotations)
+        {
+            if (GroupIdAt(a, depth) is not { } key) { buckets.Add((null, new() { a })); continue; }
+            if (seen.TryGetValue(key, out int at)) buckets[at].Items.Add(a);
+            else { seen[key] = buckets.Count; buckets.Add((key, new() { a })); }
+        }
+
+        foreach (var (key, items) in buckets)
+        {
+            if (key is null)
+            {
+                var a = items[0];
+                AnnotationList.Add(AnnotationListItem.Leaf(a, a.PageIndex + 1, _selected.Contains(a), depth));
+                continue;
+            }
+            AnnotationList.Add(AnnotationListItem.Group(
+                key.Value, items[0].PageIndex + 1, items.All(_selected.Contains), depth, items.Count));
+            EmitAnnotationRows(items, depth + 1);
+        }
     }
 
     [RelayCommand]
     private void SelectAnnotationItem(AnnotationListItem? item)
     {
         if (item is null) return;
-        var page = PageOf(item.Model);
-        SelectAnnotation(page, item.Model);
-        GoToPage(item.PageNumber);              // brings the page into view (and realizes it)
-        page?.RequestReveal(item.Model.Bounds); // then focus the annotation itself, not just the page
+        // A group header stands for its members; picking it picks the whole group.
+        var target = item.IsGroupHeader
+            ? AllAnnotations().FirstOrDefault(a => a.GroupPath.Contains(item.GroupId!.Value))
+            : item.Model;
+        if (target is null) return;
+
+        var page = PageOf(target);
+        SelectAnnotation(page, target);
+        GoToPage(target.PageIndex + 1);     // brings the page into view (and realizes it)
+        page?.RequestReveal(target.Bounds); // then focus the annotation itself, not just the page
     }
 
     public void DeleteSelectedAnnotation()

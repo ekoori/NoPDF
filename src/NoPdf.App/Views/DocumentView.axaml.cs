@@ -160,6 +160,10 @@ public partial class DocumentView : UserControl
         var iv = _vm.InitialView;
         _vm.InitialView = null;
 
+        // A remembered view mode owns the layout: it picks its own zoom from the viewport
+        // and positions itself, so the saved zoom/offset would only fight it.
+        if (_vm.ViewMode != PageViewMode.Scroll || _vm.PagesPerRow > 1) { OnViewModeChanged(); return; }
+
         if (iv is { } v) _vm.SetZoom(v.Zoom);
         else _vm.GoToPage(1);
 

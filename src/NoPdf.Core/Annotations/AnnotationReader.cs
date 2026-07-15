@@ -48,7 +48,13 @@ public static class AnnotationReader
                     if (dict is not null && subtype is not null && Known.Contains(subtype))
                     {
                         var model = Parse(dict, subtype, pi);
-                        if (model is not null) { models.Add(model); changed = true; continue; }
+                        if (model is not null)
+                        {
+                            model.GroupPath = GroupPathCodec.Read(
+                                dict.Elements.ContainsKey(AnnotationWriter.GroupKey)
+                                    ? dict.Elements.GetString(AnnotationWriter.GroupKey) : null);
+                            models.Add(model); changed = true; continue;
+                        }
                     }
                     keep.Elements.Add(item);
                 }

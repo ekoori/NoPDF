@@ -2,7 +2,6 @@ using System;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Markup.Xaml;
 using NoPdf.App.Printing;
 
 namespace NoPdf.App.Views;
@@ -13,9 +12,10 @@ public partial class PrintDialog : Window
     /// <summary>The dialog's result: options plus whether to persist them as defaults.</summary>
     public sealed record Result(PrintOptions Options, string Range, bool SaveAsDefault);
 
+    // Note: no hand-written InitializeComponent. A parameterless one would win overload
+    // resolution over Avalonia's generated InitializeComponent(bool), and only the
+    // generated one assigns the x:Name fields below — they would all stay null.
     public PrintDialog() => InitializeComponent();
-
-    private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
     /// <summary>Fills the dialog from the current defaults.</summary>
     public void Init(PrintOptions defaults, string range)

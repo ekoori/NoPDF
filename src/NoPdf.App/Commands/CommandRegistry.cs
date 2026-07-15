@@ -516,18 +516,29 @@ public sealed class CommandRegistry
         return Task.FromResult(SetTool(EditorTool.Signature));
     }
 
+    /// <summary>Verifies the document's signatures and shows them in the signatures panel.</summary>
     private string? ListSignatures()
     {
         var doc = Doc;
         if (doc is null) return "No document";
-        var sigs = doc.AllAnnotations().OfType<SignatureAnnotation>().ToList();
-        int embedded = 0;
-        try { embedded = doc.Document?.GetSignatureCount() ?? 0; } catch { }
-        if (sigs.Count == 0 && embedded == 0) return "No signatures";
-        var parts = new List<string>();
-        foreach (var s in sigs) parts.Add($"{s.SignerName} ({s.Signed:yyyy-MM-dd HH:mm})");
-        if (embedded > 0) parts.Add($"{embedded} embedded digital signature(s)");
-        return "Signatures: " + string.Join("; ", parts);
+
+        _main.RefreshDocumentSignatures();
+        _main.IsSignaturePanelOpen = true;
+
+        var verified = _main.DocumentSignatures.ToList();
+        var stamps = doc.AllAnnotations().OfType<SignatureAnnotation>().ToList();
+        if (verified.Count == 0)
+            return stamps.Count == 0
+                ? "No signatures"
+                : $"{stamps.Count} visible stamp(s), no digital signature";
+
+        // Lead with the worst verdict — that's the one worth knowing about.
+        int bad = verified.Count(v => !v.Info.IntegrityOk || v.Info.Error is not null);
+        int weak = verified.Count(v => v.Info.Error is null && v.Info.IntegrityOk && !v.Info.IsFullyValid);
+        string verdict = bad > 0 ? $"{bad} INVALID"
+            : weak > 0 ? $"{weak} unverified"
+            : "all valid";
+        return $"{verified.Count} digital signature(s): {verdict} — see the signatures panel";
     }
 
     private Task<string?> Config()

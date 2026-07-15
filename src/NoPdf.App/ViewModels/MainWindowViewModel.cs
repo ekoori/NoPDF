@@ -124,9 +124,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (!Printing.PrintService.IsSupported) return "Printing is only supported on Windows";
         try
         {
-            opts.Pages = pages ?? (string.IsNullOrWhiteSpace(range)
-                ? null
-                : NoPdf.Core.Editing.PageOps.ParseRange(range, doc.PageCount).ToList());
+            if (pages is not null) opts.Pages = pages;
+            else if (string.IsNullOrWhiteSpace(range)) opts.Pages = null;
+            else
+            {
+                // Don't quietly print the whole document because the range was a typo.
+                var parsed = NoPdf.Core.Editing.PageOps.ParseRange(range, doc.PageCount).ToList();
+                if (parsed.Count == 0) return $"No pages in range: {range}";
+                opts.Pages = parsed;
+            }
             var bytes = doc.ExportWithAnnotations();   // print what's on screen, annotations included
 #pragma warning disable CA1416 // guarded by PrintService.IsSupported
             Printing.PrintService.Print(bytes, opts);
@@ -157,6 +163,37 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             AppConfig.SetScalar("print_landscape", result.Options.Landscape ? "true" : "false");
         }
         return PrintNow(result.Range, result.Options, null);
+    }
+
+    // ----- Signatures in the current document -----
+
+    /// <summary>The embedded digital signatures of the selected tab, with their verdicts.
+    /// Shown at the bottom of the signatures panel; refreshed by <c>:siglist</c>.</summary>
+    public ObservableCollection<DocumentSignatureItem> DocumentSignatures { get; } = new();
+
+    [ObservableProperty] private string _documentSignatureSummary = "";
+
+    /// <summary>Re-verifies the current document's signatures. Verification is against the
+    /// file on disk: the in-memory copy has annotations stripped out, which would break
+    /// every byte range.</summary>
+    public void RefreshDocumentSignatures()
+    {
+        DocumentSignatures.Clear();
+        var doc = SelectedTab;
+        if (doc is null) { DocumentSignatureSummary = "No document"; return; }
+        try
+        {
+            var infos = NoPdf.Core.Signing.SignatureVerifier.Verify(File.ReadAllBytes(doc.FilePath));
+            foreach (var i in infos) DocumentSignatures.Add(new DocumentSignatureItem(i));
+            int stamps = doc.AllAnnotations().OfType<SignatureAnnotation>().Count();
+            DocumentSignatureSummary = infos.Count == 0
+                ? stamps > 0
+                    ? $"No digital signatures ({stamps} visible stamp(s) only)"
+                    : "No digital signatures"
+                : $"{infos.Count} digital signature(s)"
+                  + (doc.IsDirty ? " — unsaved edits are not covered" : "");
+        }
+        catch (Exception ex) { DocumentSignatureSummary = "Could not read signatures: " + ex.Message; }
     }
 
     // ----- Signature presets -----
@@ -511,6 +548,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         SaveSession();
         PeekLeftTabs();
         if (newValue is { IsLoaded: false }) _ = LoadDeferredAsync(newValue);
+        // The panel's verdicts belong to the old tab; don't leave them showing under a new one.
+        DocumentSignatures.Clear();
+        DocumentSignatureSummary = "";
+        if (IsSignaturePanelOpen && newValue is { IsLoaded: true }) RefreshDocumentSignatures();
     }
 
     /// <summary>Loads a restored tab's file the first time it's shown.</summary>
@@ -602,8 +643,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         doc.TextboxFrameOpacity = Config.TextboxFrameOpacity;
         ApplyPresetToDoc(doc);
         var saved = ViewStates.Get(path);
-        if (saved is not null) doc.InitialView = (saved.Zoom, saved.OffsetX, saved.OffsetY);
+        if (saved is not null)
+        {
+            doc.InitialView = (saved.Zoom, saved.OffsetX, saved.OffsetY);
+            // The view lays this out on first display; the sinks go on afterwards so
+            // restoring doesn't write straight back.
+            if (!string.IsNullOrEmpty(saved.Mode)) doc.SetView(saved.Mode, saved.Pages);
+        }
         doc.ViewStateSink = (z, x, y) => ViewStates.Set(path, z, x, y);
+        doc.ViewModeSink = (m, n) => ViewStates.SetMode(path, m, n);
         doc.CertifyRequested = sig => CertifySignature(doc, sig);
         doc.OpenUriRequested += OpenExternalUri;
         doc.RecoverBytes = _autosave.TryLoad(path); // unsaved edits from a previous run

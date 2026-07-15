@@ -96,6 +96,9 @@ public static class SignatureService
                 IncludeOption = X509IncludeOption.WholeChain,
                 DigestAlgorithm = new Oid("2.16.840.1.101.3.4.2.1"), // SHA-256
             };
+            // When the signature was made, as claimed by the signer. Self-asserted (this
+            // is not a trusted timestamp), but without it a verifier has no date at all.
+            signer.SignedAttributes.Add(new Pkcs9SigningTime(DateTime.UtcNow));
             signed.ComputeSignature(signer, silent: true);
             return Task.FromResult(signed.Encode());
         }

@@ -586,6 +586,40 @@
                         <Button Content="+ New" FontSize="12" Command="{Binding AddSignaturePresetCommand}"/>
                         <Button Content="Delete" FontSize="12" Command="{Binding DeleteSignaturePresetCommand}"/>
                     </StackPanel>
+
+                    <!-- Signatures in the document, verified (:siglist) -->
+                    <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource PanelBorder}"
+                            BorderThickness="0,1,0,0" Padding="12,8">
+                        <StackPanel Spacing="6">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Classes="muted" Text="IN THIS DOCUMENT" FontSize="11"
+                                           FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Content="Verify" FontSize="11" Padding="6,1"
+                                        Click="OnVerifySignatures"/>
+                            </Grid>
+                            <TextBlock Text="{Binding DocumentSignatureSummary}" Classes="muted"
+                                       FontSize="11" TextWrapping="Wrap"/>
+                            <ItemsControl ItemsSource="{Binding DocumentSignatures}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:DocumentSignatureItem">
+                                        <Grid ColumnDefinitions="Auto,*" Margin="0,4,0,0">
+                                            <TextBlock Text="{Binding Badge}" FontWeight="Bold" FontSize="12"
+                                                       Margin="0,0,6,0"
+                                                       Foreground="{Binding StatusColor}"/>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="{Binding Signer}" FontSize="12"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding When}" Classes="muted" FontSize="10"/>
+                                                <TextBlock Text="{Binding Summary}" FontSize="10"
+                                                           TextWrapping="Wrap"
+                                                           Foreground="{Binding StatusColor}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
                     <ListBox DockPanel.Dock="Top" ItemsSource="{Binding SignaturePresets}"
                              SelectedItem="{Binding SelectedSignaturePreset}" Background="Transparent"
                              MaxHeight="150" Margin="8,0">
@@ -666,11 +700,16 @@
                              SelectionMode="Single" Margin="4,0,4,8">
                         <ListBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:AnnotationListItem">
-                                <Grid ColumnDefinitions="*,Auto" Margin="0,1"
+                                <Grid ColumnDefinitions="*,Auto" Margin="{Binding Indent}"
                                       Background="Transparent"
                                       PointerPressed="OnAnnotationItemClick">
-                                    <TextBlock Grid.Column="0" Text="{Binding Display}" FontSize="12"
-                                               TextTrimming="CharacterEllipsis"/>
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4">
+                                        <TextBlock Text="&#x25BE;" FontSize="10" Opacity="0.6"
+                                                   VerticalAlignment="Center"
+                                                   IsVisible="{Binding IsGroupHeader}"/>
+                                        <TextBlock Text="{Binding Display}" FontSize="12"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
                                     <TextBlock Grid.Column="1" Text="{Binding PageLabel}" Classes="muted"
                                                FontSize="11" Margin="6,0,0,0"/>
                                 </Grid>

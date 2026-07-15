@@ -7,6 +7,22 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
 ## Unreleased (0.0.3 line)
 
+- **`:printdialog` always failed** with "object reference not set to an instance of an
+  object". The dialog hand-wrote an `InitializeComponent`, which won overload resolution
+  over Avalonia's generated one — the only one that wires up the named controls, so they
+  were all null. A bad page range now says so instead of quietly printing everything.
+- **Annotation groups are saved in the PDF** (under a private `/NoPdfGroup` key other
+  viewers ignore), nesting included — they used to live only in memory and were lost on
+  save. Groups now also **show in the annotations panel** as a header with their members
+  nested underneath.
+- **`:siglist` verifies signatures** instead of just counting them, and lists them at the
+  bottom of the signatures panel: signer, time, whether the signed bytes are unchanged,
+  and whether the certificate chains to a trusted root (a self-signed one reads as intact
+  but untrusted). Signatures noPDF writes now carry a signing time.
+- **`:view` is remembered per file**, alongside the zoom and scroll position.
+- **Every build raises the build number**, Debug included, so the version always names the
+  build you're running rather than skipping a number at release time.
+
 - **Deleting an annotation stopped working after a command.** Delete is a page key, and
   the command bar never handed focus back, so after `:save` you could still drag an
   annotation but not delete it. Focus now returns to the page, and `Delete` is bound

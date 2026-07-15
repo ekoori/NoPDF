@@ -100,7 +100,8 @@ public static class CommandDocs
 
         // ----- Signatures -----
         new CommandDoc("sign", "Signatures", "[alias]", "Signature tool, optionally selecting a preset", "signature"),
-        new CommandDoc("siglist", "Signatures", "", "List the signatures in this document"),
+        new CommandDoc("siglist", "Signatures", "",
+            "Verify this document's digital signatures and show them in the signatures panel"),
 
         // ----- Panels -----
         new CommandDoc("toc", "Panels", "", "Toggle the bookmarks panel", "b"),

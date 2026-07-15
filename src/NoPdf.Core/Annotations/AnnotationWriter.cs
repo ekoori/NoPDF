@@ -16,6 +16,10 @@ namespace NoPdf.Core.Annotations;
 /// </summary>
 public static class AnnotationWriter
 {
+    /// <summary>Private annotation key holding the app's grouping. PDF has no notion of
+    /// grouped markup, so it rides along as a custom entry other viewers ignore.</summary>
+    public const string GroupKey = "/NoPdfGroup";
+
     public static void Save(string sourcePath, string destPath,
         IEnumerable<PdfAnnotationModel> annotations)
     {
@@ -418,6 +422,8 @@ public static class AnnotationWriter
         if (!string.IsNullOrEmpty(model.Author)) annot.Elements.SetString("/T", model.Author);
         if (!string.IsNullOrEmpty(model.Contents)) annot.Elements.SetString("/Contents", model.Contents);
         annot.Elements.SetString("/M", "D:" + DateTime.Now.ToString("yyyyMMddHHmmss"));
+        if (model.GroupPath.Count > 0)
+            annot.Elements.SetString(GroupKey, GroupPathCodec.Write(model.GroupPath));
 
         var annots = page.Elements.GetArray("/Annots");
         if (annots is null) { annots = new PdfArray(doc); page.Elements["/Annots"] = annots; }

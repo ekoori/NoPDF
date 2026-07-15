@@ -29,7 +29,8 @@ public abstract class PdfAnnotationModel
 
     /// <summary>App-level nested grouping, innermost first / outermost last. Annotations
     /// sharing an outermost id select and move together; grouping appends a new id,
-    /// ungrouping pops the outermost. In-memory only (not persisted to the PDF).</summary>
+    /// ungrouping pops the outermost. Saved into the PDF under
+    /// <see cref="AnnotationWriter.GroupKey"/>; other viewers ignore it.</summary>
     public System.Collections.Generic.List<System.Guid> GroupPath { get; set; } = new();
 
     /// <summary>Axis-aligned bounds in page space, used for hit-testing and selection.</summary>

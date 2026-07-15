@@ -406,6 +406,8 @@ public partial class MainWindow : Window
             Vm.SelectedTab?.SelectAnnotationItemCommand.Execute(item);
     }
 
+    private void OnVerifySignatures(object? sender, RoutedEventArgs e) => Vm.RefreshDocumentSignatures();
+
     private async Task<Views.PrintDialog.Result?> ShowPrintDialogAsync(
         NoPdf.App.Printing.PrintOptions defaults, string range)
     {

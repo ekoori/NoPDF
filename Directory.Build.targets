@@ -1,9 +1,9 @@
 <Project>
   <!--
     Computes the app version as  $(VersionPrefix)-beta.YY  where YY is a build
-    counter in the gitignored  build-number.txt . A NON-Debug build of NoPdf.App
-    raises YY by one (so every real/release build is uniquely versioned); Debug
-    builds keep the current YY. scripts/release.ps1 manages YY itself and passes
+    counter in the gitignored  build-number.txt . Every build of NoPdf.App raises
+    YY by one, Debug included, so the version always identifies the build you are
+    actually running. scripts/release.ps1 manages YY itself and passes
     -p:RevSuppress=true so its four platform publishes share one version.
   -->
   <Target Name="RevBuildNumber"
@@ -16,11 +16,11 @@
       <_BuildNo Condition="'$(_BuildNo)' == ''">0</_BuildNo>
     </PropertyGroup>
 
-    <!-- Raise YY on any non-Debug build, unless release.ps1 already set it. -->
-    <PropertyGroup Condition="'$(Configuration)' != 'Debug' and '$(RevSuppress)' != 'true'">
+    <!-- Raise YY on every build, unless release.ps1 already set it. -->
+    <PropertyGroup Condition="'$(RevSuppress)' != 'true'">
       <_BuildNo>$([MSBuild]::Add($(_BuildNo), 1))</_BuildNo>
     </PropertyGroup>
-    <WriteLinesToFile Condition="'$(Configuration)' != 'Debug' and '$(RevSuppress)' != 'true'"
+    <WriteLinesToFile Condition="'$(RevSuppress)' != 'true'"
                       File="$(_BuildNoFile)" Lines="$(_BuildNo)" Overwrite="true" />
 
     <PropertyGroup>

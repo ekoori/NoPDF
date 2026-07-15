@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace NoPdf.App.Commands;
 
-/// <summary>Remembers the zoom and scroll position per file, keyed by path.</summary>
+/// <summary>Remembers the zoom, scroll position and view mode per file, keyed by path.</summary>
 public sealed class ViewStateStore
 {
     public sealed class Entry
@@ -13,6 +13,10 @@ public sealed class ViewStateStore
         public double Zoom { get; set; } = 1.0;
         public double OffsetX { get; set; }
         public double OffsetY { get; set; }
+        /// <summary>`:view` mode name ("scroll", "full", "scrollh"); blank = never set.</summary>
+        public string Mode { get; set; } = "";
+        /// <summary>Pages across (scroll/full) or rows down (scrollh).</summary>
+        public int Pages { get; set; } = 1;
     }
 
     private readonly string _path;
@@ -29,9 +33,21 @@ public sealed class ViewStateStore
 
     public Entry? Get(string file) => _map.TryGetValue(file, out var e) ? e : null;
 
+    /// <summary>Records the position, leaving the file's view mode alone.</summary>
     public void Set(string file, double zoom, double ox, double oy)
     {
-        _map[file] = new Entry { Zoom = zoom, OffsetX = ox, OffsetY = oy };
+        var e = Get(file) ?? new Entry();
+        e.Zoom = zoom; e.OffsetX = ox; e.OffsetY = oy;
+        _map[file] = e;
+        Save();
+    }
+
+    /// <summary>Records the view mode, leaving the file's position alone.</summary>
+    public void SetMode(string file, string mode, int pages)
+    {
+        var e = Get(file) ?? new Entry();
+        e.Mode = mode; e.Pages = pages;
+        _map[file] = e;
         Save();
     }
 
