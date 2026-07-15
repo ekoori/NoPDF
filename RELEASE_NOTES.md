@@ -7,7 +7,19 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
 ## Unreleased (0.0.3 line)
 
-_Nothing yet._
+- **Deleting an annotation stopped working after a command.** Delete is a page key, and
+  the command bar never handed focus back, so after `:save` you could still drag an
+  annotation but not delete it. Focus now returns to the page, and `Delete` is bound
+  globally so it works wherever focus happens to be.
+- **`:view scrollh` uses the whole viewport height** — the rows no longer stop short of
+  the top and bottom — and once zoomed in you can pan down to see the full page height.
+- **Changing `:view` keeps the page you were on** instead of jumping back to page 1.
+- **A newly opened document opens on page 1**; it used to inherit the scroll position of
+  whatever was in the tab before it.
+- **`:reload` re-reads the original file**, and drops the cached unsaved edits with it —
+  otherwise the edits you just discarded came back the next time you opened the file.
+- **Clicking an annotation in the annotations panel focuses the annotation**, not just
+  its page: the scroll-to-page was landing last and undoing the reveal.
 
 ## v0.0.3-beta.00 - 2026-07-15
 

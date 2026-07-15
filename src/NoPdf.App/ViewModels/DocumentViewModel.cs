@@ -51,6 +51,11 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
     /// <summary>Zoom + scroll offset to restore on first layout (null = none).</summary>
     public (double Zoom, double OffsetX, double OffsetY)? InitialView { get; set; }
+
+    /// <summary>True until the view has positioned this document for the first time.
+    /// Without it a re-shown tab (the view is reused across tabs) would be re-homed to
+    /// the top every time it is selected.</summary>
+    public bool PendingInitialView { get; set; } = true;
     /// <summary>Set by the host to persist view position as it changes.</summary>
     public Action<double, double, double>? ViewStateSink { get; set; }
     public void ReportViewState(double zoom, double ox, double oy) => ViewStateSink?.Invoke(zoom, ox, oy);
@@ -226,6 +231,12 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     /// <summary>Raised when the view mode changes so the view can relayout + refit.</summary>
     public event Action? ViewModeChanged;
 
+    partial void OnViewModeChanged(PageViewMode value)
+    {
+        OnPropertyChanged(nameof(ListPad));
+        OnPropertyChanged(nameof(PageMargin));
+    }
+
     public string SetView(string mode, int? count)
     {
         var m = mode.ToLowerInvariant() switch
@@ -272,6 +283,17 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public const double ItemExtraW = 2;        // page border
     public const double ItemExtraH = 20;       // page border + 18px bottom margin
     public const double ScrollbarReserve = 18; // space the scrollbar will claim once shown
+    public const double PageGapH = 12;         // gap between pages in horizontal-scroll view
+
+    /// <summary>ListBox padding for the current mode. Horizontal scroll drops the gutter
+    /// so the rows get the whole viewport height; the pages carry their own gap instead.</summary>
+    public Avalonia.Thickness ListPad =>
+        ViewMode == PageViewMode.ScrollH ? default : new Avalonia.Thickness(ListPadding / 2);
+
+    /// <summary>The margin around each page, which is also the gap between pages.</summary>
+    public Avalonia.Thickness PageMargin => ViewMode == PageViewMode.ScrollH
+        ? new Avalonia.Thickness(0, 0, PageGapH, PageGapH)
+        : new Avalonia.Thickness(0, 0, 0, ItemExtraH - 2);
 
     /// <summary>Width of one page slot (columns across).</summary>
     public double SlotWidth(double viewportWidth)
@@ -281,14 +303,28 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         return Math.Max(1, avail / Math.Max(1, PagesPerRow));
     }
 
-    /// <summary>Height of one page slot (rows down, horizontal-scroll mode).</summary>
+    /// <summary>Height of one page slot (rows down, horizontal-scroll mode). There is no
+    /// list padding in this mode, so only the horizontal scrollbar is held back.</summary>
     public double SlotHeight(double viewportHeight)
-        => Math.Max(1, (viewportHeight - ListPadding - ScrollbarReserve) / Math.Max(1, PagesPerRow));
+        => Math.Max(1, (viewportHeight - ScrollbarReserve) / Math.Max(1, PagesPerRow));
 
-    /// <summary>Zooms so the pages exactly fill their slots for the current view mode.</summary>
-    public void FitForView(double viewportWidth, double viewportHeight)
+    /// <summary>Height of one horizontal-scroll row at the CURRENT zoom — the panel is
+    /// sized to N of these, so zooming in makes it taller than the viewport and the
+    /// whole page height becomes reachable by scrolling.</summary>
+    public double RowHeight()
     {
-        var page = Pages.Count >= CurrentPage && CurrentPage >= 1 ? Pages[CurrentPage - 1] : Pages.FirstOrDefault();
+        var page = PageAt(CurrentPage);
+        return page is null ? 1 : Math.Max(1, page.DisplayHeight + PageGapH);
+    }
+
+    private PageViewModel? PageAt(int oneBased)
+        => oneBased >= 1 && oneBased <= Pages.Count ? Pages[oneBased - 1] : Pages.FirstOrDefault();
+
+    /// <summary>Zooms so the pages exactly fill their slots for the current view mode,
+    /// keeping <paramref name="keepPage"/> in focus across the relayout.</summary>
+    public void FitForView(double viewportWidth, double viewportHeight, int keepPage)
+    {
+        var page = PageAt(keepPage);
         if (page is null) return;
         double pw = page.PointWidth * DipsPerPoint, ph = page.PointHeight * DipsPerPoint;
         if (pw <= 0 || ph <= 0) return;
@@ -296,7 +332,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         double z = ViewMode switch
         {
             // N rows fill the height; pages flow down a column then to the next column.
-            PageViewMode.ScrollH => (SlotHeight(viewportHeight) - ItemExtraH) / ph,
+            PageViewMode.ScrollH => (SlotHeight(viewportHeight) - PageGapH) / ph,
             // N pages across AND the row fully visible — a whole screen per "page".
             PageViewMode.Full => Math.Min(
                 (SlotWidth(viewportWidth) - ItemExtraW) / pw,
@@ -304,10 +340,12 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
             // N across, scrolling vertically.
             _ => (SlotWidth(viewportWidth) - ItemExtraW) / pw,
         };
-        int keep = CurrentPage;
         SetZoom(z);
-        if (ViewMode != PageViewMode.Full)
-            ScrollToPageRequested?.Invoke(Math.Clamp(keep - 1, 0, Math.Max(0, PageCount - 1)));
+        // The relayout resets the scroll offset, which drags the current page back to 1 —
+        // put it back where it was.
+        keepPage = Math.Clamp(keepPage, 1, Math.Max(1, PageCount));
+        if (ViewMode == PageViewMode.Full) SetCurrentPageSilent(keepPage);
+        else GoToPage(keepPage);
     }
 
     // ----- Navigation -----
@@ -449,8 +487,8 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         if (item is null) return;
         var page = PageOf(item.Model);
         SelectAnnotation(page, item.Model);
-        GoToPage(item.PageNumber);
-        page?.RequestReveal(item.Model.Bounds); // focus the annotation itself, not just the page
+        GoToPage(item.PageNumber);              // brings the page into view (and realizes it)
+        page?.RequestReveal(item.Model.Bounds); // then focus the annotation itself, not just the page
     }
 
     public void DeleteSelectedAnnotation()
@@ -848,10 +886,12 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         Rebuild(PageOps.Compose(_workingBytes, order), order);
     }
 
-    /// <summary>Re-reads the file from disk, discarding in-memory edits.</summary>
+    /// <summary>Re-reads the original file from disk, discarding in-memory edits and any
+    /// cached copy of them (the caller drops the autosave entry to match).</summary>
     public void ReloadFromDisk()
     {
         if (!File.Exists(FilePath)) return;
+        RecoverBytes = null; // a deferred tab must not load the cached edits after this
         var (cleaned, models) = AnnotationReader.LoadAndStrip(NoPdf.Core.Import.DocumentImport.ReadAsPdfBytes(FilePath));
         var oldDoc = Document;
         var newDoc = PdfDocument.OpenBytes(cleaned, FilePath);

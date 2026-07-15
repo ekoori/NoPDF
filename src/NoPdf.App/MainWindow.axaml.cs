@@ -47,6 +47,7 @@ public partial class MainWindow : Window
 
         vm.ConfigApplied += ApplyConfigLive;
         vm.MinimizeRequested += () => WindowState = WindowState.Minimized;
+        vm.CommandBar.Closed += OnCommandBarClosed;
 
         AddHandler(KeyDownEvent, OnGlobalKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
 
@@ -54,6 +55,15 @@ public partial class MainWindow : Window
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DropEvent, OnDrop);
     }
+
+    /// <summary>Hands focus back to the page once the command bar is done with it, so
+    /// keys the page owns (Delete on a selected annotation) keep working after a command.</summary>
+    private void OnCommandBarClosed()
+        => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (Vm.CommandBar.IsVisible) return; // the command re-opened it (e.g. :marks)
+            this.GetVisualDescendants().OfType<Views.DocumentView>().FirstOrDefault()?.FocusPage();
+        }, Avalonia.Threading.DispatcherPriority.Input);
 
     private void OnDragOver(object? sender, DragEventArgs e)
         => e.DragEffects = e.DataTransfer.Contains(DataFormat.File)

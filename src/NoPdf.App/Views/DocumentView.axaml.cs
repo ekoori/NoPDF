@@ -129,6 +129,10 @@ public partial class DocumentView : UserControl
             _vm.ScrollPageRequested += OnScrollPage;
             _vm.ViewModeChanged += OnViewModeChanged;
             ApplyDpi();
+            // The view is reused when the tab changes, so a document swapped in here still
+            // needs positioning — OnAttachedToVisualTree won't fire again.
+            if (this.IsAttachedToVisualTree())
+                Dispatcher.UIThread.Post(ApplyInitialView, DispatcherPriority.Loaded);
         }
         UpdateCursor();
     }
@@ -146,15 +150,24 @@ public partial class DocumentView : UserControl
         SaveViewState();
     }
 
+    /// <summary>Positions a document the first time it is shown: at its remembered spot,
+    /// or at the top of page 1. Without the explicit reset a fresh document inherits
+    /// whatever offset the previous tab left in the (reused) ScrollViewer.</summary>
     private void ApplyInitialView()
     {
-        if (_vm?.InitialView is not { } iv) return;
-        _vm.SetZoom(iv.Zoom);
+        if (_vm is null || !_vm.PendingInitialView) return;
+        _vm.PendingInitialView = false;
+        var iv = _vm.InitialView;
+        _vm.InitialView = null;
+
+        if (iv is { } v) _vm.SetZoom(v.Zoom);
+        else _vm.GoToPage(1);
+
         Dispatcher.UIThread.Post(() =>
         {
             var sv = Scroll;
-            if (sv is not null) sv.Offset = new Vector(iv.OffsetX, iv.OffsetY);
-            _vm!.InitialView = null;
+            if (sv is null) return;
+            sv.Offset = iv is { } v2 ? new Vector(v2.OffsetX, v2.OffsetY) : default;
         }, DispatcherPriority.Background);
     }
 
@@ -176,25 +189,44 @@ public partial class DocumentView : UserControl
     private static readonly Avalonia.Controls.Templates.FuncTemplate<Panel?> StackPanelTemplate =
         new(() => new VirtualizingStackPanel());
 
-    /// <summary>A wrap panel with a fixed slot size, so exactly N pages fit per row
-    /// (horizontal) or per column (vertical) regardless of the page's own size.</summary>
-    private static Avalonia.Controls.Templates.FuncTemplate<Panel?> WrapTemplate(
-        Avalonia.Layout.Orientation o, double itemW, double itemH)
+    /// <summary>A wrap panel with a fixed slot width, so exactly N pages fit per row
+    /// regardless of the page's own size.</summary>
+    private static Avalonia.Controls.Templates.FuncTemplate<Panel?> WrapTemplate(double itemW)
         => new(() =>
         {
-            var p = new WrapPanel { Orientation = o };
-            if (o == Avalonia.Layout.Orientation.Horizontal)
+            var p = new WrapPanel
             {
-                p.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
-                if (itemW > 0) p.ItemWidth = itemW;
-            }
-            else
-            {
-                p.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
-                if (itemH > 0) p.ItemHeight = itemH;
-            }
+                Orientation = Avalonia.Layout.Orientation.Horizontal,
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            };
+            if (itemW > 0) p.ItemWidth = itemW;
             return p;
         });
+
+    /// <summary>Pages flow down a column then wrap rightwards, giving horizontal scroll.
+    /// The explicit height is what pins it to N rows: vertical scrolling otherwise offers
+    /// the panel infinite height and it lays every page out in one endless column. Sizing
+    /// that height off the current zoom (rather than the viewport) is what lets a zoomed-in
+    /// page overflow the viewport and become reachable by scrolling down.</summary>
+    private static Avalonia.Controls.Templates.FuncTemplate<Panel?> ColumnTemplate(double itemH, double panelH)
+        => new(() => new WrapPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Vertical,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
+            ItemHeight = itemH > 0 ? itemH : double.NaN,
+            Height = panelH > 0 ? panelH : double.NaN,
+        });
+
+    /// <summary>Re-sizes the horizontal-scroll panel to N rows at the current zoom.</summary>
+    private void UpdateColumnPanel()
+    {
+        if (_vm is null || _vm.ViewMode != PageViewMode.ScrollH) return;
+        var panel = PageList.GetVisualDescendants().OfType<WrapPanel>().FirstOrDefault();
+        if (panel is null) return;
+        double rowH = _vm.RowHeight();
+        panel.ItemHeight = rowH;
+        panel.Height = rowH * Math.Max(1, _vm.PagesPerRow);
+    }
 
     /// <summary>Exactly N columns in a single row — cannot wrap, so zooming can never
     /// push a page onto a second row where it would peek into view.</summary>
@@ -207,15 +239,17 @@ public partial class DocumentView : UserControl
         var sv0 = Scroll;
         var vp0 = sv0?.Viewport ?? default;
         int n = Math.Max(1, _vm.PagesPerRow);
+        // The relayout below resets the scroll offset, which would otherwise drag the
+        // current page back to 1 before the refit reads it.
+        int keep = _vm.CurrentPage;
 
         switch (_vm.ViewMode)
         {
             case PageViewMode.ScrollH:
-                // Pages fill a column top-to-bottom then wrap rightwards → horizontal scroll.
-                // The fixed slot height is what pins it to exactly n rows.
-                PageList.ItemsPanel = WrapTemplate(Avalonia.Layout.Orientation.Vertical, 0,
-                    vp0.Height > 0 ? _vm.SlotHeight(vp0.Height) : 0);
-                ScrollViewer.SetVerticalScrollBarVisibility(PageList, ScrollBarVisibility.Disabled);
+                // Rows are sized off the zoom, not the viewport, so a zoomed-in page
+                // overflows downwards and can be panned to.
+                PageList.ItemsPanel = ColumnTemplate(_vm.RowHeight(), _vm.RowHeight() * n);
+                ScrollViewer.SetVerticalScrollBarVisibility(PageList, ScrollBarVisibility.Auto);
                 ScrollViewer.SetHorizontalScrollBarVisibility(PageList, ScrollBarVisibility.Auto);
                 break;
             case PageViewMode.Full:
@@ -229,8 +263,7 @@ public partial class DocumentView : UserControl
             case PageViewMode.Scroll when n > 1:
                 // Horizontal scrolling must be OFF or the wrap panel gets infinite width
                 // and lays every page out in one endless row instead of wrapping.
-                PageList.ItemsPanel = WrapTemplate(Avalonia.Layout.Orientation.Horizontal,
-                    vp0.Width > 0 ? _vm.SlotWidth(vp0.Width) : 0, 0);
+                PageList.ItemsPanel = WrapTemplate(vp0.Width > 0 ? _vm.SlotWidth(vp0.Width) : 0);
                 ScrollViewer.SetHorizontalScrollBarVisibility(PageList, ScrollBarVisibility.Disabled);
                 ScrollViewer.SetVerticalScrollBarVisibility(PageList, ScrollBarVisibility.Auto);
                 break;
@@ -246,8 +279,21 @@ public partial class DocumentView : UserControl
             var sv = Scroll;
             if (sv is null || _vm is null) return;
             var vp = sv.Viewport;
-            if (vp.Width > 0 && vp.Height > 0) _vm.FitForView(vp.Width, vp.Height);
+            if (vp.Width > 0 && vp.Height > 0) _vm.FitForView(vp.Width, vp.Height, keep);
+            UpdateColumnPanel(); // the refit may not change the zoom, so size the panel anyway
         }, DispatcherPriority.Background);
+    }
+
+    /// <summary>Puts keyboard focus back on the page in view. Page-level keys (Delete on a
+    /// selected annotation, Escape, Ctrl+C) are handled by PageView, so they stop working
+    /// as soon as anything else — the command bar, a toolbar button — takes focus.</summary>
+    public void FocusPage()
+    {
+        var pages = PageList.GetVisualDescendants().OfType<PageView>().ToList();
+        var wanted = pages.FirstOrDefault(v => v.DataContext is PageViewModel p
+                                               && p.PageNumber == _vm?.CurrentPage);
+        if ((wanted ?? pages.FirstOrDefault()) is { } pv) pv.Focus();
+        else PageList.Focus();
     }
 
     private void OnFitWidth() => Dispatcher.UIThread.Post(() => Fit(true));
@@ -265,15 +311,20 @@ public partial class DocumentView : UserControl
     private void OnScrollToPage(int index)
     {
         if (_vm is null || index < 0 || index >= _vm.Pages.Count) return;
+        var target = _vm.Pages[index];
         Dispatcher.UIThread.Post(() =>
         {
-            PageList.ScrollIntoView(_vm.Pages[index]);
+            PageList.ScrollIntoView(target);
+            // A pending reveal will scroll to the annotation itself — landing on the
+            // page's top would undo it.
+            if (target.PendingRevealRect is not null) return;
             // Align the page's TOP with the viewport top (ScrollIntoView alone can
             // leave the page at the bottom when scrolling upward).
             Dispatcher.UIThread.Post(() =>
             {
                 var sv = Scroll;
-                var c = PageList.ContainerFromIndex(index);
+                int viewIdx = _vm.VisiblePages.IndexOf(target);
+                var c = viewIdx >= 0 ? PageList.ContainerFromIndex(viewIdx) : null;
                 if (sv is null || c is null) return;
                 var pt = c.TranslatePoint(new Point(0, 0), sv);
                 if (pt is { } p)
@@ -286,6 +337,10 @@ public partial class DocumentView : UserControl
     {
         if (e.PropertyName == nameof(DocumentViewModel.CurrentTool))
             UpdateCursor();
+        // Rows are sized off the zoom in horizontal-scroll view, so the panel has to grow
+        // with it — that overflow is what makes the whole page height scrollable.
+        else if (e.PropertyName == nameof(DocumentViewModel.ZoomPercent))
+            Dispatcher.UIThread.Post(UpdateColumnPanel, DispatcherPriority.Background);
     }
 
     private void UpdateCursor()

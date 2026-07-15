@@ -312,6 +312,7 @@ normal_bindings:
   "<c-w>": tabclose
   "<c-c>": copy
   d: delannot
+  "<del>": delannot       # works wherever focus is, not just on a focused page
   zi: zoom in
   zo: zoom out
   zz: zoom reset

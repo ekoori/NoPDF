@@ -85,7 +85,7 @@ public sealed class CommandRegistry
             ["undo"] = (_, _) => { _main.Undo(); return Msg(null); },
             ["redo"] = (_, _) => Task.FromResult(DoRedo()),
             ["reopen"] = (_, _) => { _main.ReopenClosedTab(); return Msg(null); },
-            ["reload"] = (_, _) => { Doc?.ReloadFromDisk(); return Msg(Doc is null ? "No document" : "Reloaded from disk"); },
+            ["reload"] = (_, _) => Task.FromResult(Reload()),
             ["fit"] = (_, _) => Task.FromResult(Fit(false)),
             ["fitwidth"] = (_, _) => Task.FromResult(Fit(true)),
             ["view"] = View,
@@ -421,6 +421,16 @@ public sealed class CommandRegistry
 
     private string? DoUndo() { Doc?.Undo(); return Doc is null ? "No document" : "Undo"; }
     private string? DoRedo() { Doc?.Redo(); return Doc is null ? "No document" : "Redo"; }
+
+    /// <summary>`:reload` = the file on disk wins, so the cached unsaved edits go too —
+    /// otherwise they would come back the next time the file is opened.</summary>
+    private string? Reload()
+    {
+        if (Doc is null) return "No document";
+        _main.ClearAutosave(Doc.FilePath);
+        Doc.ReloadFromDisk();
+        return "Reloaded from disk";
+    }
 
     private string? Fit(bool widthOnly)
     {

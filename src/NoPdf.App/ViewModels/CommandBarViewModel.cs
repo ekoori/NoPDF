@@ -37,6 +37,10 @@ public sealed partial class CommandBarViewModel : ViewModelBase
     public event Action? Opened;
     public event Action? FocusRequested;
 
+    /// <summary>Raised once the bar is done, so the view can hand keyboard focus back to
+    /// the page — otherwise page keys like Delete go nowhere after a command.</summary>
+    public event Action? Closed;
+
     public CommandBarViewModel(MainWindowViewModel main, int maxHistory, int visibleCount)
     {
         _main = main;
@@ -82,6 +86,7 @@ public sealed partial class CommandBarViewModel : ViewModelBase
         _suggestions = null;
         _compMatches = null;
         SetText("");
+        Closed?.Invoke();
     }
 
     public async Task ExecuteAsync()
@@ -91,7 +96,7 @@ public sealed partial class CommandBarViewModel : ViewModelBase
         _suggestions = null;
         _compMatches = null;
         SetText("");
-        if (input.Length == 0) return;
+        if (input.Length == 0) { Closed?.Invoke(); return; }
 
         string entry = Prompt == "/" ? "/" + input : input;
         RecordHistory(entry);
@@ -99,6 +104,7 @@ public sealed partial class CommandBarViewModel : ViewModelBase
         string commandLine = Prompt == "/" ? "find " + input : input;
         string? result = await _main.Commands.ExecuteAsync(commandLine);
         if (result is not null) _main.StatusText = result;
+        Closed?.Invoke(); // after the command, in case it re-opened the bar itself
     }
 
     // ----- Up/Down: cycle suggestions or history -----

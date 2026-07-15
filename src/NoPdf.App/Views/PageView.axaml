@@ -10,7 +10,7 @@
             Background="White"
             BorderBrush="#D0D0D0" BorderThickness="1"
             BoxShadow="0 2 10 0 #33000000"
-            Margin="0,0,0,18"
+            Margin="{Binding Owner.PageMargin}"
             Width="{Binding DisplayWidth}"
             Height="{Binding DisplayHeight}">
         <Panel>

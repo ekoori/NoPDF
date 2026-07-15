@@ -6,7 +6,7 @@
              x:DataType="vm:DocumentViewModel">
     <ListBox Classes="pages" x:Name="PageList"
              ItemsSource="{Binding VisiblePages}"
-             Background="{DynamicResource PageAreaBackground}" Padding="24"
+             Background="{DynamicResource PageAreaBackground}" Padding="{Binding ListPad}"
              ScrollViewer.HorizontalScrollBarVisibility="Auto"
              ScrollViewer.VerticalScrollBarVisibility="Auto">
         <ListBox.ItemTemplate>
