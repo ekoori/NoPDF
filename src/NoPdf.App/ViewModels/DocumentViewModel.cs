@@ -260,6 +260,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         int n = Math.Clamp(count ?? 1, 1, 8);
         ViewMode = m;
         PagesPerRow = n;
+        ManualZoom = false; // a fresh mode fits itself; the user hasn't overridden it yet
         RefreshVisiblePages();
         ViewModeChanged?.Invoke();
         ViewModeSink?.Invoke(ModeName(m), n);
@@ -330,8 +331,35 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         return page is null ? 1 : Math.Max(1, page.DisplayHeight + PageGapH);
     }
 
+    /// <summary>Width of one N-across column at the CURRENT zoom — the scroll-view panel
+    /// is sized to N of these, so zooming keeps exactly N columns and lets a zoomed-in row
+    /// overflow into a horizontal scroll instead of overlapping its neighbour.</summary>
+    public double ColWidth()
+    {
+        var page = PageAt(CurrentPage);
+        return page is null ? 1 : Math.Max(1, page.DisplayWidth + PageGapH);
+    }
+
     private PageViewModel? PageAt(int oneBased)
         => oneBased >= 1 && oneBased <= Pages.Count ? Pages[oneBased - 1] : Pages.FirstOrDefault();
+
+    /// <summary>True once the user has zoomed by hand (via a command), so a later relayout —
+    /// the command bar opening, a window resize — must not auto-fit their zoom away. Reset
+    /// whenever the view mode changes or an explicit fit runs.</summary>
+    public bool ManualZoom { get; private set; }
+
+    public void ClearManualZoom() => ManualZoom = false;
+
+    /// <summary>Applies a zoom requested from a command. Marks it user-driven (so it isn't
+    /// re-fitted away) and, since a command has no cursor to anchor to like the wheel does,
+    /// keeps the current page in view.</summary>
+    public void ZoomCommand(Action apply)
+    {
+        ManualZoom = true;
+        apply();
+        if (ViewMode != PageViewMode.Full)
+            ScrollToPageRequested?.Invoke(Math.Clamp(CurrentPage - 1, 0, Math.Max(0, PageCount - 1)));
+    }
 
     /// <summary>Zooms so the pages exactly fill their slots for the current view mode,
     /// keeping <paramref name="keepPage"/> in focus across the relayout.</summary>

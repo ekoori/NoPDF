@@ -273,14 +273,14 @@ public sealed class CommandRegistry
         string a = args[0].ToLowerInvariant().TrimEnd('%');
         switch (a)
         {
-            case "in": doc.ZoomInCommand.Execute(null); break;
-            case "out": doc.ZoomOutCommand.Execute(null); break;
-            case "reset": doc.ZoomResetCommand.Execute(null); break;
-            case "width": doc.RequestFitWidth(); return Msg("Fit width");
-            case "page" or "fit": doc.RequestFitPage(); return Msg("Fit page");
+            case "in": doc.ZoomCommand(() => doc.ZoomInCommand.Execute(null)); break;
+            case "out": doc.ZoomCommand(() => doc.ZoomOutCommand.Execute(null)); break;
+            case "reset": doc.ZoomCommand(() => doc.ZoomResetCommand.Execute(null)); break;
+            case "width": doc.ClearManualZoom(); doc.RequestFitWidth(); return Msg("Fit width");
+            case "page" or "fit": doc.ClearManualZoom(); doc.RequestFitPage(); return Msg("Fit page");
             default:
                 if (!double.TryParse(a, out double pct)) return Msg($"Invalid zoom: {args[0]}");
-                doc.SetZoomPercent(pct);
+                doc.ZoomCommand(() => doc.SetZoomPercent(pct));
                 break;
         }
         return Msg($"Zoom {doc.ZoomPercent}%");
@@ -533,8 +533,10 @@ public sealed class CommandRegistry
                 : $"{stamps.Count} visible stamp(s), no digital signature";
 
         // Lead with the worst verdict — that's the one worth knowing about.
-        int bad = verified.Count(v => !v.Info.IntegrityOk || v.Info.Error is not null);
-        int weak = verified.Count(v => v.Info.Error is null && v.Info.IntegrityOk && !v.Info.IsFullyValid);
+        static bool IsBroken(NoPdf.Core.Signing.SignatureInfo i)
+            => i.Error is not null || (i.IntegrityChecked && !i.IntegrityOk);
+        int bad = verified.Count(v => IsBroken(v.Info));
+        int weak = verified.Count(v => !IsBroken(v.Info) && !v.Info.IsFullyValid);
         string verdict = bad > 0 ? $"{bad} INVALID"
             : weak > 0 ? $"{weak} unverified"
             : "all valid";

@@ -1,11 +1,29 @@
 ﻿# noPDF release notes
 
 Version scheme `v0.0.X-beta.YY`: **X** is the public release line, **YY** the
-local build number (raised on every non-debug build). Public releases are cut with
+local build number (raised on every build). Public releases are cut with
 `scripts/release.ps1 -Publish`, which bumps **X**, resets **YY** to `00`, and
 publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
 ## Unreleased (0.0.3 line)
+
+- **Signature verification reads externally-signed PDFs properly.** The CMS is now taken
+  from the `/Contents` string rather than the byte-range gap, so every signer and signing
+  time is read even when a file's byte ranges are malformed (e.g. a document signed by
+  several people with a tool that rewrites the whole file each save). The signing time
+  falls back to the signature dictionary's `/M` date when the CMS carries none, and a
+  signature whose byte range doesn't line up is reported as "cannot verify — re-saved after
+  signing" instead of a bogus "invalid". _(Known gap: a signature's visible on-page stamp
+  still doesn't render — those are AcroForm widgets PDFium draws only through its form
+  module; tracked separately.)_
+- **`:view scroll N` no longer overlaps pages or leaves odd gaps when you zoom.** The
+  columns are sized to the pages at the current zoom (like the horizontal-scroll rows), so
+  zooming grows them and scrolls rather than letting them collide.
+- **Zoom commands keep the page you're on** — `:zoom in/out/<pct>` (and `zi`/`zo`) re-centre
+  the current page instead of jumping elsewhere.
+- **`:view full` is now zoomable.** Pages are laid out at their real size instead of being
+  capped to the viewport, so `:zoom` visibly resizes them and you can pan a zoomed page;
+  a hand-set zoom also survives the command bar opening (it used to snap back to fit).
 
 - **`:printdialog` always failed** with "object reference not set to an instance of an
   object". The dialog hand-wrote an `InitializeComponent`, which won overload resolution
