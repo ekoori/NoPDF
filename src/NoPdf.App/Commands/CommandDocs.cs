@@ -160,7 +160,11 @@ public static class CommandDocs
             foreach (var c in items)
             {
                 string alias = c.Aliases.Length > 0 ? $"  (aka {string.Join(", ", c.Aliases)})" : "";
-                sb.Append("#     ").Append(c.Syntax.PadRight(38)).Append(c.Description).Append(alias).Append('\n');
+                // Pad to a column, but never let a long syntax run straight into its
+                // description — keep at least a gap.
+                const int col = 38;
+                string syntax = c.Syntax.Length < col ? c.Syntax.PadRight(col) : c.Syntax + "  ";
+                sb.Append("#     ").Append(syntax).Append(c.Description).Append(alias).Append('\n');
             }
         }
         return sb.ToString();

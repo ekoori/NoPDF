@@ -326,6 +326,45 @@ public sealed class PdfDocument : IDisposable
         }
     }
 
+    /// <summary>Whether the focused field has its own edit history to step through.
+    /// PDFium keeps this per field, separate from the document's undo stack.</summary>
+    public bool FormCanUndo()
+    {
+        if (_disposed) return false;
+        lock (PdfiumLibrary.Sync)
+            return _form is not null && _formPage is not null
+                && fpdf_formfill.FORM_CanUndo(_form, _formPage) != 0;
+    }
+
+    public bool FormCanRedo()
+    {
+        if (_disposed) return false;
+        lock (PdfiumLibrary.Sync)
+            return _form is not null && _formPage is not null
+                && fpdf_formfill.FORM_CanRedo(_form, _formPage) != 0;
+    }
+
+    /// <summary>Undoes one edit inside the focused field.</summary>
+    public bool FormUndo()
+    {
+        if (_disposed) return false;
+        lock (PdfiumLibrary.Sync)
+        {
+            if (_form is null || _formPage is null) return false;
+            return fpdf_formfill.FORM_Undo(_form, _formPage) != 0;
+        }
+    }
+
+    public bool FormRedo()
+    {
+        if (_disposed) return false;
+        lock (PdfiumLibrary.Sync)
+        {
+            if (_form is null || _formPage is null) return false;
+            return fpdf_formfill.FORM_Redo(_form, _formPage) != 0;
+        }
+    }
+
     /// <summary>The text of the focused field (what the user has typed so far).</summary>
     public string FocusedFormText()
     {

@@ -104,7 +104,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // ----- Printing -----
 
     /// <summary>Set by the view; shows the print dialog and returns the chosen options.</summary>
-    public Func<Printing.PrintOptions, string, Task<Views.PrintDialog.Result?>>? PrintDialogPicker { get; set; }
+    public Func<Printing.PrintOptions, string, IReadOnlyList<PrintPreset>,
+        Task<Views.PrintDialog.Result?>>? PrintDialogPicker { get; set; }
 
     /// <summary>The print options configured in config.yaml.</summary>
     public PrintPresetStore PrintPresets { get; } = new();
@@ -151,7 +152,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public async Task<string?> ShowPrintDialog(string range)
     {
         if (PrintDialogPicker is null) return "Print dialog unavailable";
-        var result = await PrintDialogPicker(PrintDefaults(), range);
+        var result = await PrintDialogPicker(PrintDefaults(), range, PrintPresets.Presets);
         if (result is null) return "Cancelled";
 
         string saved = "";

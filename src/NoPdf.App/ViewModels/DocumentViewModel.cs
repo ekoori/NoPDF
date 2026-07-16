@@ -1313,6 +1313,15 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
     public void Undo()
     {
+        // While a field is focused, undo belongs to that field's own edit history —
+        // PDFium keeps one per field, and the document snapshots don't cover typing.
+        if (IsFormFocused && Document is { } d && d.FormCanUndo())
+        {
+            d.FormUndo();
+            MarkDirty();
+            RerenderFormPage();
+            return;
+        }
         if (_undo.Count == 0) return;
         _redo.Push(Capture());
         Restore(_undo.Pop());
@@ -1320,6 +1329,13 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
     public void Redo()
     {
+        if (IsFormFocused && Document is { } d && d.FormCanRedo())
+        {
+            d.FormRedo();
+            MarkDirty();
+            RerenderFormPage();
+            return;
+        }
         if (_redo.Count == 0) return;
         _undo.Push(Capture());
         Restore(_redo.Pop());

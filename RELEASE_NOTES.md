@@ -7,6 +7,16 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
 ## Unreleased (0.0.3 line)
 
+- **`Ctrl+Z` undoes your typing inside a form field.** PDFium keeps an edit history per
+  field, so undo/redo now goes there while a field is focused and back to the document's
+  own history once you leave it — one doesn't consume the other.
+- **The print dialog has a preset dropdown.** Pick a saved preset to load its settings, and
+  edit its name right there (renaming saves it as a new preset).
+- **Each release ships the default `config.yaml`** next to the binaries — the fully
+  commented one, generated from the live command list.
+- **Docs split**: [README.md](README.md) is now for using noPDF; everything about building,
+  the architecture and cutting releases moved to [CONTRIBUTE.md](CONTRIBUTE.md).
+
 - **Fill in PDF forms.** View mode (`:hand`) is now also form mode: click a field — or press
   `f` and type its label, since hints now cover form fields as well as links — and type.
   With the mouse you can click to place the caret, drag to select text inside a field, and

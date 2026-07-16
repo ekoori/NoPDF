@@ -6,6 +6,12 @@
         Background="{DynamicResource PanelBackground}">
     <StackPanel Margin="16" Spacing="10">
         <StackPanel Spacing="4">
+            <TextBlock Text="Preset" FontSize="11" Opacity="0.7"/>
+            <ComboBox x:Name="PresetBox" HorizontalAlignment="Stretch"
+                      SelectionChanged="OnPresetChanged"/>
+        </StackPanel>
+
+        <StackPanel Spacing="4">
             <TextBlock Text="Printer" FontSize="11" Opacity="0.7"/>
             <ComboBox x:Name="PrinterBox" HorizontalAlignment="Stretch"/>
         </StackPanel>
@@ -29,7 +35,7 @@
         <Border BorderBrush="{DynamicResource PanelBorder}" BorderThickness="0,1,0,0" Padding="0,10,0,0">
             <StackPanel Spacing="10">
                 <StackPanel Spacing="4">
-                    <TextBlock Text="Save as preset (name it to use with :print &lt;name&gt;)"
+                    <TextBlock Text="Save as preset — name it to use with :print &lt;name&gt;"
                                FontSize="11" Opacity="0.7"/>
                     <TextBox x:Name="PresetNameBox" Watermark="leave blank to just print"/>
                 </StackPanel>

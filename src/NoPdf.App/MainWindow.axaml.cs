@@ -453,10 +453,11 @@ public partial class MainWindow : Window
     private void OnVerifySignatures(object? sender, RoutedEventArgs e) => Vm.RefreshDocumentSignatures();
 
     private async Task<Views.PrintDialog.Result?> ShowPrintDialogAsync(
-        NoPdf.App.Printing.PrintOptions defaults, string range)
+        NoPdf.App.Printing.PrintOptions defaults, string range,
+        IReadOnlyList<NoPdf.App.Commands.PrintPreset> presets)
     {
         var dlg = new Views.PrintDialog();
-        dlg.Init(defaults, range);
+        dlg.Init(defaults, range, presets);
         return await dlg.ShowDialog<Views.PrintDialog.Result?>(this);
     }
 

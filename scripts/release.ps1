@@ -115,6 +115,20 @@ foreach ($t in $targets) {
     if ($rid -eq 'win-x64') { Copy-Item $src (Join-Path $outDir 'NoPdf.App.exe') -Force }
 }
 
+# Ship the documented default config next to the binaries. It is generated (the command
+# list is rendered into its comments), so the app itself has to produce it.
+$cfgPath = Join-Path $outDir 'config.yaml'
+$cfgExe = Join-Path $root 'src\NoPdf.App\bin\Release\net10.0\win-x64\publish\NoPdf.App.exe'
+if (Test-Path $cfgExe) {
+    & $cfgExe --write-default-config $cfgPath | Out-Null
+    if (Test-Path $cfgPath) {
+        $lines = (Get-Content $cfgPath).Count
+        Write-Host "  default config -> $cfgPath ($lines lines)" -ForegroundColor Green
+    } else {
+        Write-Warning "Could not write $cfgPath"
+    }
+}
+
 Write-Host "`nArtifacts written to $outDir" -ForegroundColor Cyan
 
 if (-not $Publish) {
