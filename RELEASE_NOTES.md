@@ -13,9 +13,13 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
   several people with a tool that rewrites the whole file each save). The signing time
   falls back to the signature dictionary's `/M` date when the CMS carries none, and a
   signature whose byte range doesn't line up is reported as "cannot verify — re-saved after
-  signing" instead of a bogus "invalid". _(Known gap: a signature's visible on-page stamp
-  still doesn't render — those are AcroForm widgets PDFium draws only through its form
-  module; tracked separately.)_
+  signing" instead of a bogus "invalid".
+- **Form fields and signature stamps now render.** noPDF drew pages without their widget
+  annotations, so AcroForm content — text/checkbox/radio/list/button fields, and the visible
+  "Digitally signed by …" stamps — was simply missing. Pages now get PDFium's form pass
+  (`FPDF_FFLDraw`) on top of the page render, which is the only way those are drawn. Fields
+  appear exactly as the document authors them (no viewer-added highlight wash). Filling
+  fields in is still read-only for now — this is the display half.
 - **`:view scroll N` no longer overlaps pages or leaves odd gaps when you zoom.** The
   columns are sized to the pages at the current zoom (like the horizontal-scroll rows), so
   zooming grows them and scrolls rather than letting them collide.

@@ -28,6 +28,15 @@ public sealed class PdfDocument : IDisposable
     private GCHandle _bufferHandle;
     private bool _disposed;
 
+    // AcroForm (form-fill) environment. PDFium draws widget annotations — form field
+    // contents and signature appearance stamps — only through this module; a plain
+    // FPDF_RenderPageBitmap with FPDF_ANNOT skips them entirely. Created on first
+    // render and torn down before the document closes.
+    private FpdfFormHandleT? _form;
+    // PDFium keeps a pointer to this struct, so it has to outlive the form handle.
+    private FPDF_FORMFILLINFO? _formInfo;
+    private bool _formTried;
+
     /// <summary>Absolute path the document was loaded from (may be null for in-memory).</summary>
     public string? FilePath { get; }
 
@@ -91,6 +100,53 @@ public sealed class PdfDocument : IDisposable
     /// <summary>Displayed page size in PDF points (rotation already applied).</summary>
     public PageInfo GetPageSize(int index) => _pages[index];
 
+    /// <summary>True when the document has an AcroForm (or XFA) — i.e. form fields
+    /// and/or signature widgets that need the form module to render.</summary>
+    public bool HasForm
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            lock (PdfiumLibrary.Sync)
+                return fpdf_formfill.FPDF_GetFormType(_doc) != FORMTYPE_NONE;
+        }
+    }
+
+    private const int FORMTYPE_NONE = 0;
+
+    /// <summary>
+    /// The form-fill environment, created on first use. Null when the document has no
+    /// form or PDFium refused to create one — callers just skip the widget pass.
+    /// Must be called under <see cref="PdfiumLibrary.Sync"/>.
+    /// </summary>
+    private FpdfFormHandleT? EnsureForm()
+    {
+        if (_form is not null) return _form;
+        if (_formTried) return null;
+        _formTried = true;
+        if (fpdf_formfill.FPDF_GetFormType(_doc) == FORMTYPE_NONE) return null;
+
+        // Interface version 2 is current; older builds only accept 1. The callbacks are
+        // all optional for rendering — nothing here changes the form, so PDFium never
+        // needs to call back for invalidation.
+        foreach (int version in new[] { 2, 1 })
+        {
+            var info = new FPDF_FORMFILLINFO { Version = version };
+            var handle = fpdf_formfill.FPDFDOC_InitFormFillEnvironment(_doc, info);
+            if (handle is not null)
+            {
+                _formInfo = info;
+                _form = handle;
+                // Render fields as the document authored them: no viewer-added blue wash
+                // over every widget.
+                fpdf_formfill.FPDF_RemoveFormFieldHighlight(handle);
+                return _form;
+            }
+            info.Dispose();
+        }
+        return null;
+    }
+
     private int[]? _rotations;
 
     /// <summary>Page rotation in degrees (0/90/180/270). Read lazily and cached.</summary>
@@ -146,10 +202,11 @@ public sealed class PdfDocument : IDisposable
                         handle.AddrOfPinnedObject(), stride);
                     try
                     {
+                        const int flags = FPDF_ANNOT | FPDF_LCD_TEXT;
                         // Opaque white background (0xAARRGGBB -> 0xFFFFFFFF).
                         fpdfview.FPDFBitmapFillRect(bmp, 0, 0, width, height, 0xFFFFFFFF);
-                        fpdfview.FPDF_RenderPageBitmap(bmp, page, 0, 0, width, height, 0,
-                            FPDF_ANNOT | FPDF_LCD_TEXT);
+                        fpdfview.FPDF_RenderPageBitmap(bmp, page, 0, 0, width, height, 0, flags);
+                        DrawFormWidgets(page, bmp, width, height, flags);
                     }
                     finally { fpdfview.FPDFBitmapDestroy(bmp); }
                 }
@@ -159,6 +216,26 @@ public sealed class PdfDocument : IDisposable
         finally { handle.Free(); }
 
         return new RenderedPage { Width = width, Height = height, Stride = stride, Pixels = pixels };
+    }
+
+    /// <summary>
+    /// Draws the page's widget annotations (form field contents, signature stamps) over
+    /// the already-rendered page. This is the second half of PDFium's standard render
+    /// pass; without it widgets are simply absent. Must be called under
+    /// <see cref="PdfiumLibrary.Sync"/> with <paramref name="page"/> loaded.
+    /// </summary>
+    private void DrawFormWidgets(FpdfPageT page, FpdfBitmapT bmp, int width, int height, int flags)
+    {
+        var form = EnsureForm();
+        if (form is null) return;
+        // The form module tracks pages it has been told about; FFLDraw on an unannounced
+        // page draws nothing.
+        fpdf_formfill.FORM_OnAfterLoadPage(page, form);
+        try
+        {
+            fpdf_formfill.FPDF_FFLDraw(form, bmp, page, 0, 0, width, height, 0, flags);
+        }
+        finally { fpdf_formfill.FORM_OnBeforeClosePage(page, form); }
     }
 
     /// <summary>
@@ -272,6 +349,15 @@ public sealed class PdfDocument : IDisposable
         _disposed = true;
         lock (PdfiumLibrary.Sync)
         {
+            // The form environment holds the document; it has to go first.
+            if (_form != null)
+            {
+                fpdf_formfill.FPDFDOC_ExitFormFillEnvironment(_form);
+                _form = null;
+            }
+            _formInfo?.Dispose();
+            _formInfo = null;
+
             if (_doc != null)
             {
                 fpdfview.FPDF_CloseDocument(_doc);
