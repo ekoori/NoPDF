@@ -107,14 +107,19 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public Func<Printing.PrintOptions, string, Task<Views.PrintDialog.Result?>>? PrintDialogPicker { get; set; }
 
     /// <summary>The print options configured in config.yaml.</summary>
-    public Printing.PrintOptions PrintDefaults() => new()
-    {
-        Printer = Config.PrintPrinter,
-        Copies = Config.PrintCopies,
-        FitToPage = Config.PrintFitToPage,
-        Grayscale = Config.PrintGrayscale,
-        Landscape = Config.PrintLandscape,
-    };
+    public PrintPresetStore PrintPresets { get; } = new();
+
+    /// <summary>Options a bare <c>:print</c> uses: the preset marked default, else the
+    /// config's print_* keys.</summary>
+    public Printing.PrintOptions PrintDefaults()
+        => PrintPresets.Default?.ToOptions() ?? new()
+        {
+            Printer = Config.PrintPrinter,
+            Copies = Config.PrintCopies,
+            FitToPage = Config.PrintFitToPage,
+            Grayscale = Config.PrintGrayscale,
+            Landscape = Config.PrintLandscape,
+        };
 
     /// <summary>Prints the current document. <paramref name="range"/> blank = all pages.</summary>
     public string PrintNow(string range, Printing.PrintOptions opts, IReadOnlyList<int>? pages)
@@ -149,20 +154,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var result = await PrintDialogPicker(PrintDefaults(), range);
         if (result is null) return "Cancelled";
 
-        if (result.SaveAsDefault)
+        string saved = "";
+        if (!string.IsNullOrWhiteSpace(result.PresetName))
         {
-            Config.PrintPrinter = result.Options.Printer;
-            Config.PrintCopies = result.Options.Copies;
-            Config.PrintFitToPage = result.Options.FitToPage;
-            Config.PrintGrayscale = result.Options.Grayscale;
-            Config.PrintLandscape = result.Options.Landscape;
-            AppConfig.SetScalar("print_printer", $"\"{result.Options.Printer}\"");
-            AppConfig.SetScalar("print_copies", result.Options.Copies.ToString());
-            AppConfig.SetScalar("print_fit_to_page", result.Options.FitToPage ? "true" : "false");
-            AppConfig.SetScalar("print_grayscale", result.Options.Grayscale ? "true" : "false");
-            AppConfig.SetScalar("print_landscape", result.Options.Landscape ? "true" : "false");
+            var preset = PrintPreset.From(result.PresetName.Trim(), result.Options, result.MakeDefault);
+            PrintPresets.Save(preset);
+            saved = $" (saved preset \"{preset.Name}\"{(preset.IsDefault ? ", now the default" : "")})";
         }
-        return PrintNow(result.Range, result.Options, null);
+        return PrintNow(result.Range, result.Options, null) + saved;
     }
 
     // ----- Signatures in the current document -----
@@ -653,8 +652,31 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         doc.ViewStateSink = (z, x, y) => ViewStates.Set(path, z, x, y);
         doc.ViewModeSink = (m, n) => ViewStates.SetMode(path, m, n);
         doc.CertifyRequested = sig => CertifySignature(doc, sig);
+        doc.StatusSink = msg => { if (doc.IsActive) StatusText = msg; };
         doc.OpenUriRequested += OpenExternalUri;
         doc.RecoverBytes = _autosave.TryLoad(path); // unsaved edits from a previous run
+    }
+
+    /// <summary>
+    /// After a save-as, the tab IS the file it was written to. Everything keyed by path —
+    /// the view-state sinks, the recovery copy, recents, the session — has to move with it,
+    /// or the tab would keep saving its position under the old name and `:copypath` would
+    /// hand back a path this tab no longer edits.
+    /// </summary>
+    public void RebindDoc(DocumentViewModel doc, string newPath)
+    {
+        try { newPath = Path.GetFullPath(newPath); } catch { /* keep as given */ }
+        string old = doc.FilePath;
+        if (string.Equals(old, newPath, StringComparison.OrdinalIgnoreCase)) { ClearAutosave(old); return; }
+
+        ClearAutosave(old);       // the old file's recovery copy no longer describes this tab
+        doc.RebindTo(newPath);
+        ClearAutosave(newPath);   // and what's on disk now matches, so drop any for the new one
+        doc.ViewStateSink = (z, x, y) => ViewStates.Set(newPath, z, x, y);
+        doc.ViewModeSink = (m, n) => ViewStates.SetMode(newPath, m, n);
+        Recent.Add(newPath);
+        RefreshRecent();
+        SaveSession();
     }
 
     /// <summary>`:open` semantics — load the file into the current tab (replacing it),
@@ -872,5 +894,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>Copies the active text selection of the current document to the clipboard.</summary>
-    public string? GetSelectionText() => SelectedTab?.GetActiveSelectionText();
+    /// <summary>What :copy / Ctrl+C takes: text selected inside a form field being filled,
+    /// otherwise the page text selection.</summary>
+    public string? GetSelectionText()
+    {
+        if (SelectedTab is { IsFormFocused: true } t && t.SelectedFormText() is { Length: > 0 } s)
+            return s;
+        return SelectedTab?.GetActiveSelectionText();
+    }
 }

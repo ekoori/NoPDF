@@ -88,15 +88,9 @@ public partial class DocumentView : UserControl
         if (_vm.ViewMode == PageViewMode.Full) return;
         var sv = Scroll;
         if (sv is null) return;
-        double offset = sv.Offset.Y;
-        int best = -1;
-        double bestTop = double.NegativeInfinity;
-        foreach (var c in PageList.GetRealizedContainers())
-        {
-            if (c.DataContext is not PageViewModel pvm) continue;
-            double top = c.Bounds.Y - offset;
-            if (top <= 8 && top > bestTop) { bestTop = top; best = pvm.PageIndex; }
-        }
+        int best = _vm.ViewMode == PageViewMode.ScrollH
+            ? LeadingPageHorizontal(sv)
+            : LeadingPageVertical(sv);
         if (best >= 0) _vm.SetCurrentPageSilent(best + 1);
 
         // Throttle persistence of the view position.
@@ -106,6 +100,39 @@ public partial class DocumentView : UserControl
             _lastViewSave = now;
             SaveViewState();
         }
+    }
+
+    /// <summary>The last page whose top has passed the viewport top — the one being read
+    /// in a vertically-scrolling view.</summary>
+    private int LeadingPageVertical(ScrollViewer sv)
+    {
+        int best = -1;
+        double bestTop = double.NegativeInfinity;
+        foreach (var c in PageList.GetRealizedContainers())
+        {
+            if (c.DataContext is not PageViewModel pvm) continue;
+            double top = c.Bounds.Y - sv.Offset.Y;
+            if (top <= 8 && top > bestTop) { bestTop = top; best = pvm.PageIndex; }
+        }
+        return best;
+    }
+
+    /// <summary>The first page of the leftmost visible column — the one being read in the
+    /// horizontal-scroll view. Tracking this by Y (as the vertical view does) would never
+    /// change as you scroll sideways, which is why the current page used to stick.</summary>
+    private int LeadingPageHorizontal(ScrollViewer sv)
+    {
+        int best = -1;
+        double bestX = double.PositiveInfinity, bestY = double.PositiveInfinity;
+        foreach (var c in PageList.GetRealizedContainers())
+        {
+            if (c.DataContext is not PageViewModel pvm) continue;
+            if (c.Bounds.X - sv.Offset.X < -8) continue;  // scrolled off to the left
+            if (c.Bounds.X < bestX - 1 ||
+                (Math.Abs(c.Bounds.X - bestX) <= 1 && c.Bounds.Y < bestY))
+            { bestX = c.Bounds.X; bestY = c.Bounds.Y; best = pvm.PageIndex; }
+        }
+        return best;
     }
 
     private void OnDataContextChanged(object? sender, EventArgs e)
@@ -201,10 +228,12 @@ public partial class DocumentView : UserControl
     /// that height off the current zoom (rather than the viewport) is what lets a zoomed-in
     /// page overflow the viewport and become reachable by scrolling down.</summary>
     private static Avalonia.Controls.Templates.FuncTemplate<Panel?> ColumnTemplate(double itemH, double panelH)
+        // Centred: when the rows are shorter than the viewport they sit in the middle;
+        // once zoomed past it the centring is a no-op and it scrolls from the top edge.
         => new(() => new WrapPanel
         {
             Orientation = Avalonia.Layout.Orientation.Vertical,
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
             ItemHeight = itemH > 0 ? itemH : double.NaN,
             Height = panelH > 0 ? panelH : double.NaN,
         });
@@ -215,10 +244,12 @@ public partial class DocumentView : UserControl
     /// slot width let a zoomed-in page spill over) and a zoomed-in row overflows into a
     /// horizontal scroll.</summary>
     private static Avalonia.Controls.Templates.FuncTemplate<Panel?> ColumnsTemplate(double itemW, double panelW)
+        // Centred: when the columns are narrower than the viewport they sit in the middle;
+        // once zoomed past it the centring is a no-op and it scrolls from the left edge.
         => new(() => new WrapPanel
         {
             Orientation = Avalonia.Layout.Orientation.Horizontal,
-            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
             ItemWidth = itemW > 0 ? itemW : double.NaN,
             Width = panelW > 0 ? panelW : double.NaN,
         });
@@ -342,8 +373,8 @@ public partial class DocumentView : UserControl
             // A pending reveal will scroll to the annotation itself — landing on the
             // page's top would undo it.
             if (target.PendingRevealRect is not null) return;
-            // Align the page's TOP with the viewport top (ScrollIntoView alone can
-            // leave the page at the bottom when scrolling upward).
+            // Align the page's leading edge with the viewport (ScrollIntoView alone can
+            // leave the page at the far edge when moving backwards).
             Dispatcher.UIThread.Post(() =>
             {
                 var sv = Scroll;
@@ -351,8 +382,15 @@ public partial class DocumentView : UserControl
                 var c = viewIdx >= 0 ? PageList.ContainerFromIndex(viewIdx) : null;
                 if (sv is null || c is null) return;
                 var pt = c.TranslatePoint(new Point(0, 0), sv);
-                if (pt is { } p)
-                    sv.Offset = new Vector(sv.Offset.X, Math.Max(0, sv.Offset.Y + p.Y - 24));
+                if (pt is not { } p) return;
+                // Horizontal-scroll view flows in columns, so a page is reached by moving
+                // sideways: bring its LEFT edge to the viewport. Everything else scrolls
+                // vertically and wants the page's top.
+                double maxX = Math.Max(0, sv.Extent.Width - sv.Viewport.Width);
+                double maxY = Math.Max(0, sv.Extent.Height - sv.Viewport.Height);
+                sv.Offset = _vm.ViewMode == PageViewMode.ScrollH
+                    ? new Vector(Math.Clamp(sv.Offset.X + p.X - 12, 0, maxX), sv.Offset.Y)
+                    : new Vector(sv.Offset.X, Math.Clamp(sv.Offset.Y + p.Y - 24, 0, maxY));
             }, DispatcherPriority.Background);
         });
     }
@@ -388,8 +426,11 @@ public partial class DocumentView : UserControl
         var props = e.GetCurrentPoint(this).Properties;
         bool hand = _vm?.CurrentTool == EditorTool.Hand && props.IsLeftButtonPressed;
         if (!hand && !props.IsMiddleButtonPressed) return;
-        // In view mode, a click on a link follows it instead of starting a pan.
-        if (hand && (e.Source as Visual)?.FindAncestorOfType<PageView>()?.HasLinkAt(e) == true) return;
+        // In view mode a click on a link follows it, and a click in a form field lands in
+        // the field, instead of starting a pan. This runs in the tunnel phase — before
+        // PageView sees the click — so without these the page would just pan away.
+        if (hand && (e.Source as Visual)?.FindAncestorOfType<PageView>() is { } pv
+                 && (pv.HasLinkAt(e) || pv.HasFormFieldAt(e))) return;
         var sv = Scroll;
         if (sv is null) return;
 

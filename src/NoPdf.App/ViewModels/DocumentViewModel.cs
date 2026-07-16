@@ -23,8 +23,18 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     private const double MaxZoom = 8.0;
 
     public PdfDocument? Document { get; private set; }
-    public string FilePath { get; }
-    public string Title { get; }
+
+    /// <summary>The file this tab IS. A save-as re-points it (see <see cref="RebindTo"/>),
+    /// so :save, :copypath and the session all follow the new file.</summary>
+    [ObservableProperty] private string _filePath;
+    [ObservableProperty] private string _title;
+
+    /// <summary>Re-points this tab at the file it was just written to.</summary>
+    public void RebindTo(string newPath)
+    {
+        FilePath = newPath;
+        Title = Path.GetFileName(newPath);
+    }
 
     // In-memory PDF the viewer edits (known annotations stripped into the model).
     private byte[] _workingBytes;
@@ -66,6 +76,9 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
     /// <summary>Raised when a certified signature stamp is committed, to run the signing flow.</summary>
     public Action<SignatureAnnotation>? CertifyRequested { get; set; }
+
+    /// <summary>Set by the host so the document can report to the status bar.</summary>
+    public Action<string>? StatusSink { get; set; }
 
     /// <summary>Name printed on new signatures (from config or active preset).</summary>
     public string SignerName { get; set; } = "";
@@ -733,6 +746,8 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         public string Label = "";
         public int? TargetPage;
         public string? Uri;
+        /// <summary>A form field rather than a link: following it focuses the field for typing.</summary>
+        public bool IsFormField;
     }
 
     private Dictionary<int, List<PdfLink>>? _links;
@@ -768,24 +783,193 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         else if (!string.IsNullOrEmpty(link.Uri)) OpenUriRequested?.Invoke(link.Uri!);
     }
 
-    /// <summary>Collects link hints for the currently visible (realized) pages.</summary>
+    // ----- Form filling (AcroForm) -----
+
+    /// <summary>True when the document has fillable form fields.</summary>
+    public bool HasForm => Document?.HasForm == true;
+
+    /// <summary>True while a form field has the keyboard: typing goes into the PDF rather
+    /// than running normal-mode key bindings. Escape drops it.</summary>
+    [ObservableProperty] private bool _isFormFocused;
+
+    private int _formPageIndex = -1;
+    // Field values live inside PDFium, so the working bytes are stale until pulled back out.
+    private bool _formDirty;
+
+    /// <summary>Focuses the form field under a page-space point (view/hand mode click, or
+    /// an `f` hint). False when there is no field there.</summary>
+    public bool TryFocusFormField(int pageIndex, double pageX, double pageY)
+    {
+        if (Document is null || !Document.HasForm) return false;
+        if (!Document.FormClick(pageIndex, pageX, pageY)) return false;
+        _formPageIndex = pageIndex;
+        IsFormFocused = true;
+        // The click itself may have toggled a checkbox or radio button.
+        _formDirty = true;
+        MarkDirty();
+        RerenderFormPage();
+        StatusSink?.Invoke("Filling in the form — type to edit, Esc to leave the field");
+        return true;
+    }
+
+    private Dictionary<int, IReadOnlyList<FormFieldInfo>>? _formFields;
+
+    /// <summary>The form fields on a page, read once per document. Cached because the hover
+    /// cursor asks on every mouse move, and each miss is a native page load.</summary>
+    public IReadOnlyList<FormFieldInfo> FormFieldsOn(int pageIndex)
+    {
+        if (Document is not { HasForm: true } d) return Array.Empty<FormFieldInfo>();
+        _formFields ??= new Dictionary<int, IReadOnlyList<FormFieldInfo>>();
+        if (!_formFields.TryGetValue(pageIndex, out var list))
+            _formFields[pageIndex] = list = d.GetFormFields(pageIndex);
+        return list;
+    }
+
+    /// <summary>True if a fillable field sits under a page-space point (for the cursor).
+    /// Tested against the cached rects — asking PDFium per mouse move would be both slow
+    /// and disruptive to the field being edited.</summary>
+    public bool HasFormFieldAt(int pageIndex, double pageX, double pageY)
+    {
+        foreach (var f in FormFieldsOn(pageIndex))
+            if (f.IsFillable && pageX >= f.Left && pageX <= f.Right
+                             && pageY >= f.Bottom && pageY <= f.Top) return true;
+        return false;
+    }
+
+    /// <summary>Mouse press inside a field: focuses it and starts a drag-selection.</summary>
+    public bool FormMouseDown(int pageIndex, double pageX, double pageY)
+    {
+        if (Document is null || !Document.HasForm) return false;
+        if (!Document.FormMouseDown(pageIndex, pageX, pageY)) return false;
+        _formPageIndex = pageIndex;
+        IsFormFocused = true;
+        _formDirty = true;   // the press may have toggled a checkbox or radio button
+        MarkDirty();
+        RerenderFormPage();
+        StatusSink?.Invoke("Filling in the form — type to edit, Esc to leave the field");
+        return true;
+    }
+
+    /// <summary>Drag inside the focused field (extends its text selection).</summary>
+    public void FormMouseMove(int pageIndex, double pageX, double pageY)
+    {
+        if (!IsFormFocused || Document is null) return;
+        Document.FormMouseMove(pageIndex, pageX, pageY);
+        RerenderFormPage();
+    }
+
+    public void FormMouseUp(int pageIndex, double pageX, double pageY)
+    {
+        if (!IsFormFocused || Document is null) return;
+        Document.FormMouseUp(pageIndex, pageX, pageY);
+        RerenderFormPage();
+    }
+
+    /// <summary>Text selected inside the focused field, so :copy / Ctrl+C can take it.</summary>
+    public string SelectedFormText() => Document?.SelectedFormText() ?? "";
+
+    public void TypeIntoForm(char c)
+    {
+        if (!IsFormFocused || Document is null) return;
+        if (!Document.FormChar(c)) return;
+        _formDirty = true;
+        MarkDirty();
+        RerenderFormPage();
+    }
+
+    /// <summary>Delete/arrows/Home/End/Tab. Backspace and Enter go to <see cref="TypeIntoForm"/>.</summary>
+    public void SendFormKey(int virtualKey)
+    {
+        if (!IsFormFocused || Document is null) return;
+        if (!Document.FormKey(virtualKey)) return;
+        _formDirty = true;
+        MarkDirty();
+        RerenderFormPage();
+    }
+
+    /// <summary>The text of the field being filled, for the status bar.</summary>
+    public string FocusedFormText() => Document?.FocusedFormText() ?? "";
+
+    /// <summary>Drops form focus (Escape), committing the field's value.</summary>
+    public void ExitFormField()
+    {
+        if (!IsFormFocused) return;
+        IsFormFocused = false;
+        Document?.FormKillFocus();  // commits the edit into the document
+        RerenderFormPage();
+        _formPageIndex = -1;
+    }
+
+    private void RerenderFormPage()
+    {
+        if (_formPageIndex >= 0 && _formPageIndex < Pages.Count)
+            Pages[_formPageIndex].ForceRerender();
+    }
+
+    /// <summary>Forgets form focus — for when the underlying document is swapped out and
+    /// the focus (and any unflushed values) belong to the old one.</summary>
+    private void ResetFormState()
+    {
+        IsFormFocused = false;
+        _formPageIndex = -1;
+        _formDirty = false;
+        _formFields = null; // rects belong to the document being replaced
+    }
+
+    /// <summary>Pulls filled-in form values back out of PDFium into the working bytes.
+    /// Field edits are held inside PDFium, so without this a save would write the document
+    /// as it was before the form was filled.</summary>
+    private void FlushFormValues()
+    {
+        if (!_formDirty || Document is null) return;
+        try
+        {
+            Document.FormKillFocus();       // commit the field being edited
+            _workingBytes = Document.SaveWithFormValues();
+            _formDirty = false;
+            IsFormFocused = false;
+            _links = null;                  // link offsets are re-read from the new bytes
+        }
+        catch { /* keep the old bytes rather than lose the document */ }
+    }
+
+    /// <summary>Collects hints for the currently visible (realized) pages: links to follow
+    /// and form fields to fill in.</summary>
     public bool EnterHintMode()
     {
         ExitHintMode();
         _links ??= LinkReader.ReadAll(_workingBytes);
-        var targets = new List<(int page, PdfLink link)>();
+
+        var targets = new List<HintTarget>();
         foreach (var p in Pages)
-            if (p.IsRealized && _links.TryGetValue(p.PageIndex, out var ls))
-                foreach (var l in ls) targets.Add((p.PageIndex, l));
+        {
+            if (!p.IsRealized) continue;
+            if (_links.TryGetValue(p.PageIndex, out var ls))
+                foreach (var l in ls)
+                    targets.Add(new HintTarget
+                    {
+                        PageIndex = p.PageIndex, Rect = l.Rect,
+                        TargetPage = l.TargetPage, Uri = l.Uri,
+                    });
+            foreach (var f in FormFieldsOn(p.PageIndex))
+            {
+                if (!f.IsFillable) continue;  // signature fields are signed via :sign
+                targets.Add(new HintTarget
+                {
+                    PageIndex = p.PageIndex,
+                    Rect = new TextRect(f.Left, f.Bottom, f.Right, f.Top),
+                    IsFormField = true,
+                });
+            }
+        }
         if (targets.Count == 0) return false;
 
         var labels = HintLabels(targets.Count);
         for (int i = 0; i < targets.Count; i++)
-            _hints.Add(new HintTarget
-            {
-                PageIndex = targets[i].page, Rect = targets[i].link.Rect, Label = labels[i],
-                TargetPage = targets[i].link.TargetPage, Uri = targets[i].link.Uri,
-            });
+        {
+            targets[i].Label = labels[i];
+            _hints.Add(targets[i]);
+        }
         IsHintMode = true;
         HintPrefix = "";
         NotifyAllPages();
@@ -816,7 +1000,13 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
     private void Follow(HintTarget h)
     {
-        if (h.TargetPage is { } tp) GoToPage(tp + 1);
+        if (h.IsFormField)
+        {
+            // Land in the middle of the field, as a click there would.
+            TryFocusFormField(h.PageIndex, (h.Rect.Left + h.Rect.Right) / 2,
+                (h.Rect.Bottom + h.Rect.Top) / 2);
+        }
+        else if (h.TargetPage is { } tp) GoToPage(tp + 1);
         else if (!string.IsNullOrEmpty(h.Uri)) OpenUriRequested?.Invoke(h.Uri!);
     }
 
@@ -890,10 +1080,15 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>Current document bytes with all annotations baked in (for signing).</summary>
-    public byte[] ExportWithAnnotations() => AnnotationWriter.SaveToBytes(_workingBytes, AnnotationsForSave());
+    public byte[] ExportWithAnnotations()
+    {
+        FlushFormValues();
+        return AnnotationWriter.SaveToBytes(_workingBytes, AnnotationsForSave());
+    }
 
     public Task SaveAsync(string? destPath = null)
     {
+        FlushFormValues();          // filled-in fields live in PDFium until pulled back out
         string dest = destPath ?? FilePath;
         var annots = AnnotationsForSave();
         var bytes = _workingBytes;
@@ -981,6 +1176,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         _undo.Clear(); _redo.Clear();
         _selected.Clear(); AnnotationEditor = null;
         _activeSelectionPage = null; _findMatches.Clear(); _findIndex = -1;
+        ResetFormState(); // the old focus belonged to the document just replaced
 
         Pages.Clear(); Thumbnails.Clear(); Outline.Clear();
         var byPage = models.GroupBy(a => a.PageIndex).ToDictionary(g => g.Key, g => g.ToList());
@@ -1050,6 +1246,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         _selected.Clear();
         _findMatches.Clear();
         _findIndex = -1;
+        ResetFormState(); // BeginChange already folded any form values into newBytes
 
         Pages.Clear();
         Thumbnails.Clear();
@@ -1105,6 +1302,10 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     /// <summary>Call immediately before a mutating operation to make it undoable.</summary>
     public void BeginChange()
     {
+        // Any filled-in form values are still inside PDFium; fold them into the working
+        // bytes first, or the snapshot (and the operation about to run on those bytes)
+        // would quietly drop them.
+        FlushFormValues();
         _undo.Push(Capture());
         if (_undo.Count > 100) _undo.TryPop(out _);
         _redo.Clear();

@@ -55,6 +55,7 @@ public sealed class CommandRegistry
             ["highlight"] = Highlight, ["hl"] = Highlight,
             ["print"] = Print,
             ["printdialog"] = PrintDialogCmd,
+            ["printpreset"] = PrintPresetCmd,
             ["save"] = Save, ["w"] = Save,
             ["saveas"] = SaveAs,
             ["close"] = Close, ["q"] = Close,
@@ -324,8 +325,44 @@ public sealed class CommandRegistry
     }
 
     /// <summary>Prints straight away using the defaults from the config.</summary>
+    /// <summary>A page range like "2-3,5" — as opposed to a preset name.</summary>
+    private static bool LooksLikeRange(string s)
+        => s.Length > 0 && s.All(c => char.IsAsciiDigit(c) || c is '-' or ',');
+
+    /// <summary>`:print [preset] [range]` — a leading token that isn't a range names a preset;
+    /// with none, the preset marked default (or the config's print_* keys) is used.</summary>
     private Task<string?> Print(string[] args, string rest)
-        => Msg(_main.PrintNow(rest, _main.PrintDefaults(), null));
+    {
+        var opts = _main.PrintDefaults();
+        string range = rest;
+        if (args.Length > 0 && !LooksLikeRange(args[0]))
+        {
+            var preset = _main.PrintPresets.Find(args[0]);
+            if (preset is null) return Msg($"No print preset named \"{args[0]}\"");
+            opts = preset.ToOptions();
+            range = string.Join(' ', args.Skip(1));
+        }
+        return Msg(_main.PrintNow(range, opts, null));
+    }
+
+    /// <summary>`:printpreset` — list, set the default, or delete a saved preset.</summary>
+    private Task<string?> PrintPresetCmd(string[] args, string rest)
+    {
+        var store = _main.PrintPresets;
+        if (args.Length == 0 || args[0] is "list")
+        {
+            if (store.Presets.Count == 0) return Msg("No print presets — save one from :printdialog");
+            return Msg("Print presets: " + string.Join(", ", store.Presets.Select(p =>
+                p.Name + (p.IsDefault ? " (default)" : ""))));
+        }
+        if (args.Length >= 2 && args[0] is "default")
+            return Msg(store.MakeDefault(args[1])
+                ? $"\"{args[1]}\" is now the default for :print"
+                : $"No print preset named \"{args[1]}\"");
+        if (args.Length >= 2 && args[0] is "del" or "delete")
+            return Msg(store.Remove(args[1]) ? $"Deleted preset \"{args[1]}\"" : $"No preset named \"{args[1]}\"");
+        return Msg("Usage: printpreset [list | default <name> | del <name>]");
+    }
 
     /// <summary>Shows the print dialog, optionally saving the chosen options as defaults.</summary>
     private async Task<string?> PrintDialogCmd(string[] args, string rest)
@@ -450,16 +487,19 @@ public sealed class CommandRegistry
     {
         var doc = Doc;
         if (doc is null) return "No document";
-        string? dest = args.Length > 0 ? rest : null;
+        // `:w <file>` writes elsewhere and the tab becomes that file.
+        string? dest = args.Length > 0 ? Tokenize(rest).FirstOrDefault() : null;
         await doc.SaveAsync(dest);
-        return dest is null ? "Saved" : $"Saved to {dest}";
+        if (dest is null) { _main.ClearAutosave(doc.FilePath); return "Saved"; }
+        _main.RebindDoc(doc, dest);
+        return $"Saved to {dest} — now editing that file";
     }
 
     private async Task<string?> SaveAs(string[] args, string rest)
     {
         var doc = Doc;
         if (doc is null) return "No document";
-        string? dest = rest.Length > 0 ? rest : null;
+        string? dest = rest.Length > 0 ? Tokenize(rest).FirstOrDefault() : null;
         if (dest is null)
         {
             string dir = Path.GetDirectoryName(doc.FilePath) ?? "";
@@ -468,7 +508,8 @@ public sealed class CommandRegistry
             if (dest is null) return "Cancelled";
         }
         await doc.SaveAsync(dest);
-        return $"Saved to {dest}";
+        _main.RebindDoc(doc, dest);
+        return $"Saved to {dest} — now editing that file";
     }
 
     private Task<string?> Close(string[] args, string rest)

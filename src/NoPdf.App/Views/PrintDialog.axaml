@@ -28,8 +28,13 @@
 
         <Border BorderBrush="{DynamicResource PanelBorder}" BorderThickness="0,1,0,0" Padding="0,10,0,0">
             <StackPanel Spacing="10">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Save as preset (name it to use with :print &lt;name&gt;)"
+                               FontSize="11" Opacity="0.7"/>
+                    <TextBox x:Name="PresetNameBox" Watermark="leave blank to just print"/>
+                </StackPanel>
                 <CheckBox x:Name="DefaultBox"
-                          Content="Save these as the defaults for :print"/>
+                          Content="Make this preset the default for :print"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
                     <Button Content="Cancel" Click="OnCancel" MinWidth="80"/>
                     <Button Content="Print" Click="OnPrint" MinWidth="80" IsDefault="True"/>

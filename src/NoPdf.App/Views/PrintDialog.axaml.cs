@@ -9,8 +9,9 @@ namespace NoPdf.App.Views;
 /// <summary>Print options dialog. Returns the chosen options, or null if cancelled.</summary>
 public partial class PrintDialog : Window
 {
-    /// <summary>The dialog's result: options plus whether to persist them as defaults.</summary>
-    public sealed record Result(PrintOptions Options, string Range, bool SaveAsDefault);
+    /// <summary>The dialog's result: the options, the page range, and — when the user named
+    /// one — a preset to save them under (usable as <c>:print &lt;name&gt;</c>).</summary>
+    public sealed record Result(PrintOptions Options, string Range, string PresetName, bool MakeDefault);
 
     // Note: no hand-written InitializeComponent. A parameterless one would win overload
     // resolution over Avalonia's generated InitializeComponent(bool), and only the
@@ -48,5 +49,6 @@ public partial class PrintDialog : Window
                 Landscape = LandscapeBox.IsChecked == true,
             },
             RangeBox.Text ?? "",
+            PresetNameBox.Text ?? "",
             DefaultBox.IsChecked == true));
 }

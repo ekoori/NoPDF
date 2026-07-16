@@ -14,7 +14,7 @@ namespace NoPdf.App.Views;
 
 public partial class PageView : UserControl
 {
-    private enum Mode { None, TextSelect, DrawDrag, DrawPoly, MoveAnn, ResizeAnn, Marquee }
+    private enum Mode { None, TextSelect, DrawDrag, DrawPoly, MoveAnn, ResizeAnn, Marquee, FormDrag }
 
     private PageViewModel? _current;
     private Mode _mode;
@@ -120,6 +120,15 @@ public partial class PageView : UserControl
         return _current.Owner.LinkAt(_current.PageIndex, p.X, p.Y) is not null;
     }
 
+    /// <summary>True if a fillable form field is under the pointer — DocumentView asks
+    /// before starting a pan, so the click can land in the field instead.</summary>
+    public bool HasFormFieldAt(PointerEventArgs e)
+    {
+        if (_current is null) return false;
+        var p = ToPage(AreaPos(e));
+        return _current.Owner.HasFormFieldAt(_current.PageIndex, p.X, p.Y);
+    }
+
     private PdfPoint ToPage(Point p) => _current!.Transform.ToPage(p);
     private Point ToDip(PdfPoint p) => _current!.Transform.ToDip(p);
     private Point AreaPos(PointerEventArgs e) => e.GetPosition(PageArea);
@@ -144,9 +153,20 @@ public partial class PageView : UserControl
         switch (tool)
         {
             case EditorTool.Hand:
-                // In view/pan mode a click follows a link under the cursor.
+                // View/pan mode is also form-filling mode: a click follows a link or lands
+                // in a form field; anything else falls through to panning.
                 if (_current.Owner.LinkAt(_current.PageIndex, page.X, page.Y) is { } link)
-                { _current.Owner.FollowLink(link); e.Handled = true; }
+                { _current.Owner.FollowLink(link); e.Handled = true; return; }
+                if (_current.Owner.FormMouseDown(_current.PageIndex, page.X, page.Y))
+                {
+                    // Hold the pointer so a drag selects text inside the field.
+                    _mode = Mode.FormDrag;
+                    e.Pointer.Capture(this);
+                    e.Handled = true;
+                    return;
+                }
+                // Clicking off a field commits and leaves it.
+                _current.Owner.ExitFormField();
                 return; // otherwise pan is handled by DocumentView
             case EditorTool.Zoom:
                 return; // pan handled by DocumentView
@@ -241,6 +261,10 @@ public partial class PageView : UserControl
                 _dragged = true;
                 _current.SetMarquee(RectFrom(_startPage, page));
                 break;
+            case Mode.FormDrag:
+                _dragged = true;
+                _current.Owner.FormMouseMove(_current.PageIndex, page.X, page.Y);
+                break;
             case Mode.ResizeAnn when _active is not null:
                 EnsureGestureUndo();
                 var target = page;
@@ -268,6 +292,10 @@ public partial class PageView : UserControl
                 break;
             case Mode.DrawDrag:
                 FinishDraw();
+                break;
+            case Mode.FormDrag:
+                _current.Owner.FormMouseUp(_current.PageIndex, ToPage(AreaPos(e)).X, ToPage(AreaPos(e)).Y);
+                e.Pointer.Capture(null);
                 break;
             // DrawPoly is finished by double-click / Enter, not release.
             case Mode.MoveAnn:
@@ -683,9 +711,13 @@ public partial class PageView : UserControl
         switch (_current.Owner.CurrentTool)
         {
             case EditorTool.Hand:
-                // Finger over a link, otherwise leave the pan (open-hand) cursor.
+                // Finger over a link, I-beam over a fillable form field, otherwise the
+                // pan (open-hand) cursor.
                 Cursor = _current.Owner.LinkAt(_current.PageIndex, page.X, page.Y) is not null
-                    ? CFinger : PanCursors.Open;
+                    ? CFinger
+                    : _current.Owner.HasFormFieldAt(_current.PageIndex, page.X, page.Y)
+                        ? CIbeam
+                        : PanCursors.Open;
                 return;
             case EditorTool.Zoom:
             case EditorTool.Line or EditorTool.Rectangle or EditorTool.Arrow

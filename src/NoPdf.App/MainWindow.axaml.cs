@@ -50,6 +50,7 @@ public partial class MainWindow : Window
         vm.CommandBar.Closed += OnCommandBarClosed;
 
         AddHandler(KeyDownEvent, OnGlobalKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        AddHandler(TextInputEvent, OnGlobalTextInput, Avalonia.Interactivity.RoutingStrategies.Tunnel);
 
         DragDrop.SetAllowDrop(this, true);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
@@ -217,6 +218,28 @@ public partial class MainWindow : Window
             e.Handled = true; return;
         }
 
+        // A focused form field owns the keyboard — ':' and 'j' are just characters to type,
+        // so this has to come before the command-line triggers and binding dispatch.
+        // Escape gives the keyboard back.
+        if (Vm.SelectedTab?.IsFormFocused == true && !ctrl && !alt)
+        {
+            var tab = Vm.SelectedTab;
+            switch (e.Key)
+            {
+                case Key.Escape:
+                    tab.ExitFormField(); Vm.StatusText = "Left the form field"; e.Handled = true; return;
+                // PDFium takes backspace and enter as character events, not key-downs.
+                case Key.Back: tab.TypeIntoForm('\b'); e.Handled = true; return;
+                case Key.Enter: tab.TypeIntoForm('\r'); e.Handled = true; return;
+                default:
+                    if (FormVirtualKey(e.Key) is { } vk)
+                    { tab.SendFormKey(vk); e.Handled = true; return; }
+                    // Printable keys arrive as TextInput; let them through, but don't let
+                    // them run normal-mode bindings.
+                    return;
+            }
+        }
+
         // Command-line / search triggers and Escape (no modifiers).
         if (!ctrl && !alt)
         {
@@ -273,6 +296,27 @@ public partial class MainWindow : Window
 
         // Keep the page focused: never let Tab move focus into the toolbar.
         if (e.Key is Key.Tab) { e.Handled = true; return; }
+    }
+
+    /// <summary>Keys a PDF form field handles as key-downs (Windows virtual-key codes),
+    /// or null for anything that should be typed as a character instead.</summary>
+    private static int? FormVirtualKey(Key key) => key switch
+    {
+        Key.Delete => 46, Key.Left => 37, Key.Right => 39, Key.Up => 38, Key.Down => 40,
+        Key.Home => 36, Key.End => 35, Key.Tab => 9,
+        _ => null,
+    };
+
+    /// <summary>Typed characters go into the focused form field.</summary>
+    private void OnGlobalTextInput(object? sender, TextInputEventArgs e)
+    {
+        var tab = Vm.SelectedTab;
+        if (tab?.IsFormFocused != true) return;
+        // A real text box (command bar, annotation editor) still wins.
+        if (FocusManager?.GetFocusedElement() is TextBox) return;
+        foreach (char c in e.Text ?? "")
+            if (!char.IsControl(c)) tab.TypeIntoForm(c);
+        e.Handled = true;
     }
 
     private static readonly Dictionary<Key, string> SpecialKeys = new()

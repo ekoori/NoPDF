@@ -7,6 +7,26 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
 ## Unreleased (0.0.3 line)
 
+- **Fill in PDF forms.** View mode (`:hand`) is now also form mode: click a field — or press
+  `f` and type its label, since hints now cover form fields as well as links — and type.
+  With the mouse you can click to place the caret, drag to select text inside a field, and
+  toggle checkboxes/radios; the pointer shows an I-beam over a field and no longer pans the
+  page when you click one. Backspace/Delete/arrows/Home/End/Tab work, `Ctrl+C` copies a
+  field's selection, **Esc** leaves the field, and clicking away commits it. Filled values
+  are saved into the file (they live inside PDFium until then, so they're folded back in on
+  save, and before any page operation). Signature fields aren't offered for typing — those
+  are for `:sign`.
+- **`:w <file>` re-points the tab at the file it just wrote**, so `:save`, `:copypath` and
+  the session all follow the new file instead of the one you saved away from.
+- **`:view scroll N` / `:view scrollh N` stay centred when you zoom** instead of drifting to
+  the left/top edge.
+- **`:page next` works in `:view scrollh`.** Pages are reached sideways in that view, but it
+  was aligning them vertically (so nothing moved) and tracking the current page by vertical
+  position (so it never changed as you scrolled across).
+- **Print presets replace the single set of print defaults.** `:printdialog` can save its
+  choices as a *named* preset; `:print <name>` uses one, a bare `:print` uses whichever is
+  marked default, and `:printpreset [list | default <name> | del <name>]` manages them.
+
 - **Signature verification reads externally-signed PDFs properly.** The CMS is now taken
   from the `/Contents` string rather than the byte-range gap, so every signer and signing
   time is read even when a file's byte ranges are malformed (e.g. a document signed by
