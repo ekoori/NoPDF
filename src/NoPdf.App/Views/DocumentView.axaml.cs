@@ -139,6 +139,9 @@ public partial class DocumentView : UserControl
     {
         if (_vm is not null)
         {
+            // Remember where this document was before it leaves the (shared) view, so
+            // switching back to its tab returns to the same spot.
+            SaveViewState();
             _vm.PropertyChanged -= OnVmPropertyChanged;
             _vm.ScrollToPageRequested -= OnScrollToPage;
             _vm.FitWidthRequested -= OnFitWidth;
@@ -158,10 +161,10 @@ public partial class DocumentView : UserControl
             _vm.ScrollPageRequested += OnScrollPage;
             _vm.ViewModeChanged += OnViewModeChanged;
             ApplyDpi();
-            // The view is reused when the tab changes, so a document swapped in here still
-            // needs positioning — OnAttachedToVisualTree won't fire again.
+            // The view is recycled when the tab changes, so a document swapped in here has
+            // to re-apply its own mode and position — OnAttachedToVisualTree won't fire again.
             if (this.IsAttachedToVisualTree())
-                Dispatcher.UIThread.Post(ApplyInitialView, DispatcherPriority.Loaded);
+                Dispatcher.UIThread.Post(ApplyViewForDoc, DispatcherPriority.Loaded);
         }
         UpdateCursor();
     }
@@ -170,7 +173,7 @@ public partial class DocumentView : UserControl
     {
         base.OnAttachedToVisualTree(e);
         ApplyDpi();
-        Dispatcher.UIThread.Post(() => { HookScroll(); PageList.Focus(); ApplyInitialView(); }, DispatcherPriority.Loaded);
+        Dispatcher.UIThread.Post(() => { HookScroll(); PageList.Focus(); ApplyViewForDoc(); }, DispatcherPriority.Loaded);
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -179,28 +182,45 @@ public partial class DocumentView : UserControl
         SaveViewState();
     }
 
-    /// <summary>Positions a document the first time it is shown: at its remembered spot,
-    /// or at the top of page 1. Without the explicit reset a fresh document inherits
-    /// whatever offset the previous tab left in the (reused) ScrollViewer.</summary>
-    private void ApplyInitialView()
+    /// <summary>
+    /// Shows the current document with ITS OWN view mode and position. Runs every time a
+    /// document is put in this view, not just the first time: the view (and its panels and
+    /// scroll viewer) is recycled between tabs, so without this a tab would keep whatever
+    /// mode and offset the previously shown tab left behind — which made a `:view` command
+    /// look like it applied to every tab.
+    /// </summary>
+    private void ApplyViewForDoc()
     {
-        if (_vm is null || !_vm.PendingInitialView) return;
+        if (_vm is null) return;
+        bool first = _vm.PendingInitialView;
         _vm.PendingInitialView = false;
-        var iv = _vm.InitialView;
-        _vm.InitialView = null;
 
-        // A remembered view mode owns the layout: it picks its own zoom from the viewport
-        // and positions itself, so the saved zoom/offset would only fight it.
-        if (_vm.ViewMode != PageViewMode.Scroll || _vm.PagesPerRow > 1) { OnViewModeChanged(); return; }
+        // First display: the remembered-from-disk position. Later: where this tab was when
+        // you last left it.
+        var saved = first ? _vm.InitialView : _vm.LastView;
+        if (first) _vm.InitialView = null;
+        int keep = _vm.CurrentPage;
 
-        if (iv is { } v) _vm.SetZoom(v.Zoom);
-        else _vm.GoToPage(1);
+        RelayoutPanels();   // this document's mode — not the last tab's
 
         Dispatcher.UIThread.Post(() =>
         {
+            if (_vm is null) return;
             var sv = Scroll;
-            if (sv is null) return;
-            sv.Offset = iv is { } v2 ? new Vector(v2.OffsetX, v2.OffsetY) : default;
+            bool modeOwnsZoom = _vm.ViewMode != PageViewMode.Scroll || _vm.PagesPerRow > 1;
+
+            if (saved is { } v) _vm.SetZoom(v.Zoom);
+            else if (modeOwnsZoom && sv is { Viewport.Width: > 0, Viewport.Height: > 0 } && !_vm.ManualZoom)
+                _vm.FitForView(sv.Viewport.Width, sv.Viewport.Height, keep);
+            else if (first) _vm.GoToPage(1);
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                UpdateWrapPanel(); // panels are sized off the zoom we just set
+                var s = Scroll;
+                if (s is null) return;
+                s.Offset = saved is { } v2 ? new Vector(v2.OffsetX, v2.OffsetY) : default;
+            }, DispatcherPriority.Background);
         }, DispatcherPriority.Background);
     }
 
@@ -291,12 +311,32 @@ public partial class DocumentView : UserControl
     private void OnViewModeChanged()
     {
         if (_vm is null) return;
-        var sv0 = Scroll;
-        var vp0 = sv0?.Viewport ?? default;
-        int n = Math.Max(1, _vm.PagesPerRow);
         // The relayout below resets the scroll offset, which would otherwise drag the
         // current page back to 1 before the refit reads it.
         int keep = _vm.CurrentPage;
+        RelayoutPanels();
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            var sv = Scroll;
+            if (sv is null || _vm is null) return;
+            var vp = sv.Viewport;
+            // A hand-set zoom (a :zoom command) must survive relayouts; only auto-fit when
+            // the user hasn't overridden it.
+            if (vp.Width > 0 && vp.Height > 0 && !_vm.ManualZoom) _vm.FitForView(vp.Width, vp.Height, keep);
+            UpdateWrapPanel(); // the refit may not change the zoom, so size the panel anyway
+        }, DispatcherPriority.Background);
+    }
+
+    /// <summary>Rebuilds the item panel and scrollbars for the current document's view mode.
+    /// The view is recycled between tabs, so its panels still describe whichever document
+    /// was shown last — every tab has to re-assert its own layout when it comes forward.</summary>
+    private void RelayoutPanels()
+    {
+        if (_vm is null) return;
+        var sv0 = Scroll;
+        var vp0 = sv0?.Viewport ?? default;
+        int n = Math.Max(1, _vm.PagesPerRow);
 
         switch (_vm.ViewMode)
         {
@@ -326,17 +366,6 @@ public partial class DocumentView : UserControl
                 ScrollViewer.SetVerticalScrollBarVisibility(PageList, ScrollBarVisibility.Auto);
                 break;
         }
-
-        Dispatcher.UIThread.Post(() =>
-        {
-            var sv = Scroll;
-            if (sv is null || _vm is null) return;
-            var vp = sv.Viewport;
-            // A hand-set zoom (a :zoom command) must survive relayouts; only auto-fit when
-            // the user hasn't overridden it.
-            if (vp.Width > 0 && vp.Height > 0 && !_vm.ManualZoom) _vm.FitForView(vp.Width, vp.Height, keep);
-            UpdateWrapPanel(); // the refit may not change the zoom, so size the panel anyway
-        }, DispatcherPriority.Background);
     }
 
     /// <summary>Puts keyboard focus back on the page in view. Page-level keys (Delete on a

@@ -1,10 +1,12 @@
 using System;
 using System.IO;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using PdfSharp.Drawing;
+using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
 using PdfSharp.Pdf.Signatures;
 
@@ -58,8 +60,36 @@ public static class SignatureService
             PageIndex = 0,
             Rectangle = new XRect(0, 0, 0, 0), // invisible field; the visible stamp is separate
         };
-        _ = DigitalSignatureHandler.ForDocument(doc, new CertSigner(cert), options);
+        var handler = DigitalSignatureHandler.ForDocument(doc, new CertSigner(cert), options);
+        AddSignerName(handler, doc, cert.GetNameInfo(X509NameType.SimpleName, false));
         doc.Save(destPath);
+    }
+
+    /// <summary>
+    /// Puts the signer's name in the signature dictionary (/Name). PDFsharp doesn't write
+    /// it — its options have no such field — and while the spec says a viewer should read
+    /// the name off the certificate, plenty of them show /Name and nothing else.
+    ///
+    /// The dictionary only exists once the handler builds its components, which it does
+    /// during Save; the method that does it is internal, so this reaches for it and gives
+    /// up quietly if a future PDFsharp moves it — a signature without /Name is still a
+    /// valid signature, and losing the name beats losing the signing.
+    /// </summary>
+    private static void AddSignerName(DigitalSignatureHandler handler, PdfDocument doc, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return;
+        try
+        {
+            var build = typeof(DigitalSignatureHandler).GetMethod("AddSignatureComponentsAsync",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (build is null) return;
+            if (build.Invoke(handler, null) is Task t) t.GetAwaiter().GetResult();
+
+            foreach (var o in doc.Internals.GetAllObjects())
+                if (o is PdfDictionary d && d.Elements.GetName("/Type") == "/Sig")
+                    d.Elements.SetString("/Name", name);
+        }
+        catch { /* sign without the name rather than not at all */ }
     }
 
     private sealed class CertSigner : IDigitalSigner

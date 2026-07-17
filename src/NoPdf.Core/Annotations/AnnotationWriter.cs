@@ -243,7 +243,12 @@ public static class AnnotationWriter
 
     private static byte[]? _logoMask;
 
-    /// <summary>Raw 8-bit alpha (LogoPx²), 0 = transparent (white bg) .. 255 = opaque.</summary>
+    /// <summary>Peak opacity of the watermark, 0..255. The stored mask only reaches ~33,
+    /// which is invisible on white, so it is scaled up to this.</summary>
+    private const int WatermarkPeak = 90;
+
+    /// <summary>Raw 8-bit alpha (LogoPx²), 0 = transparent (white bg) .. 255 = opaque,
+    /// normalised so the logo actually reads as a watermark.</summary>
     private static byte[] LogoMask()
     {
         if (_logoMask is not null) return _logoMask;
@@ -251,7 +256,17 @@ public static class AnnotationWriter
             .GetManifestResourceStream("NoPdf.Core.Assets.sig_logo_mask.bin");
         using var ms = new System.IO.MemoryStream();
         s!.CopyTo(ms);
-        return _logoMask = ms.ToArray();
+        var raw = ms.ToArray();
+
+        byte peak = 0;
+        foreach (var b in raw) if (b > peak) peak = b;
+        if (peak is > 0 and < WatermarkPeak)
+        {
+            double k = WatermarkPeak / (double)peak;
+            for (int i = 0; i < raw.Length; i++)
+                raw[i] = (byte)Math.Min(255, Math.Round(raw[i] * k));
+        }
+        return _logoMask = raw;
     }
 
     /// <summary>zlib-wrapped deflate, as expected by PDF <c>/FlateDecode</c>.</summary>
@@ -268,7 +283,8 @@ public static class AnnotationWriter
     {
         var rc = sig.Rect;
         var annot = NewAnnot(doc, page, "/Stamp", rc.Left, rc.Bottom, rc.Right, rc.Top, sig);
-        annot.Elements.SetName("/Name", "/#23noPDF"); // custom stamp name
+        // No /Name: on a stamp that names a PREDEFINED icon, and viewers that honour it
+        // over the appearance stream drew nothing for a custom one. /AP is authoritative.
 
         // Faint watermark image XObject (JPEG / DCTDecode) with a soft mask so the
         // white background is transparent and the page shows through.
@@ -321,11 +337,9 @@ public static class AnnotationWriter
         form.Elements["/Resources"] = res;
 
         var sb = new StringBuilder();
-        // watermark, left-aligned, aspect preserved (logo is square)
-        double sq = Math.Min(rc.Width, rc.Height);
-        double cx = rc.Left, cy = rc.Bottom + (rc.Height - sq) / 2;
-        sb.Append("q ").Append(F(sq)).Append(" 0 0 ").Append(F(sq)).Append(' ')
-          .Append(F(cx)).Append(' ').Append(F(cy)).Append(" cm /Sig Do Q\n");
+        // Watermark stretched to the signature frame, so it takes the shape the user drew.
+        sb.Append("q ").Append(F(rc.Width)).Append(" 0 0 ").Append(F(rc.Height)).Append(' ')
+          .Append(F(rc.Left)).Append(' ').Append(F(rc.Bottom)).Append(" cm /Sig Do Q\n");
         // border (honours width + opacity)
         double bw = Math.Max(0.5, sig.StrokeWidth), inset = bw / 2;
         bool bAlpha = sig.BorderOpacity < 0.999;

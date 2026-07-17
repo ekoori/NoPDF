@@ -214,13 +214,8 @@ public sealed class PageOverlay : Control
         var color = Color.FromRgb(sig.Color.R, sig.Color.G, sig.Color.B);
         var logo = SigLogo();
         if (logo is not null)
-        {
-            // Square watermark, aspect preserved, aligned to the left edge.
-            var ls = logo.Size;
-            double sq = Math.Min(rect.Width, rect.Height);
-            var dest = new Rect(rect.X, rect.Y + (rect.Height - sq) / 2, sq, sq);
-            ctx.DrawImage(logo, new Rect(ls), dest);
-        }
+            // Stretched to the frame, matching what gets written into the PDF.
+            ctx.DrawImage(logo, new Rect(logo.Size), rect);
         ctx.DrawRectangle(null, FramePen(sig, color), rect);
 
         double s = _scale;

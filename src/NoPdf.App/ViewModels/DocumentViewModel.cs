@@ -68,7 +68,17 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public bool PendingInitialView { get; set; } = true;
     /// <summary>Set by the host to persist view position as it changes.</summary>
     public Action<double, double, double>? ViewStateSink { get; set; }
-    public void ReportViewState(double zoom, double ox, double oy) => ViewStateSink?.Invoke(zoom, ox, oy);
+
+    /// <summary>Where this document was last looked at. The view and its scroll viewer are
+    /// shared between tabs, so switching back has to put this document's own position back
+    /// — otherwise it inherits whatever the other tab left behind.</summary>
+    public (double Zoom, double OffsetX, double OffsetY)? LastView { get; private set; }
+
+    public void ReportViewState(double zoom, double ox, double oy)
+    {
+        LastView = (zoom, ox, oy);
+        ViewStateSink?.Invoke(zoom, ox, oy);
+    }
 
     /// <summary>Set by the host to persist the `:view` mode as it changes. Assigned after
     /// any restore, so restoring a mode doesn't write it straight back.</summary>
