@@ -243,9 +243,9 @@ public static class AnnotationWriter
 
     private static byte[]? _logoMask;
 
-    /// <summary>Peak opacity of the watermark, 0..255. The stored mask only reaches ~33,
-    /// which is invisible on white, so it is scaled up to this.</summary>
-    private const int WatermarkPeak = 90;
+    /// <summary>Peak opacity of the watermark, 0..255 (~50%). The stored mask only reaches
+    /// ~33, which is invisible on white, so it is scaled up to this.</summary>
+    private const int WatermarkPeak = 128;
 
     /// <summary>Raw 8-bit alpha (LogoPx²), 0 = transparent (white bg) .. 255 = opaque,
     /// normalised so the logo actually reads as a watermark.</summary>
@@ -337,9 +337,12 @@ public static class AnnotationWriter
         form.Elements["/Resources"] = res;
 
         var sb = new StringBuilder();
-        // Watermark stretched to the signature frame, so it takes the shape the user drew.
-        sb.Append("q ").Append(F(rc.Width)).Append(" 0 0 ").Append(F(rc.Height)).Append(' ')
-          .Append(F(rc.Left)).Append(' ').Append(F(rc.Bottom)).Append(" cm /Sig Do Q\n");
+        // Watermark: square logo, aspect kept (stretching distorts it), sized to the frame
+        // and centred — it's the backdrop the text sits on.
+        double sq = Math.Min(rc.Width, rc.Height);
+        sb.Append("q ").Append(F(sq)).Append(" 0 0 ").Append(F(sq)).Append(' ')
+          .Append(F(rc.Left + (rc.Width - sq) / 2)).Append(' ')
+          .Append(F(rc.Bottom + (rc.Height - sq) / 2)).Append(" cm /Sig Do Q\n");
         // border (honours width + opacity)
         double bw = Math.Max(0.5, sig.StrokeWidth), inset = bw / 2;
         bool bAlpha = sig.BorderOpacity < 0.999;
@@ -347,21 +350,21 @@ public static class AnnotationWriter
         sb.Append(F(bw)).Append(" w\n").Append(Col(sig.Color, true));
         sb.Append(Re(rc.Left + inset, rc.Bottom + inset, rc.Width - bw, rc.Height - bw)).Append("S\n");
         if (bAlpha) sb.Append("Q\n");
-        // text
-        double pad = 6;
-        double x = rc.Left + pad, top = rc.Top - pad;
+
+        // Text scaled to the frame, so a bigger stamp gets bigger writing.
+        var m = SignatureTextMetrics.For(rc.Width, rc.Height, sig.SignerName, sig.Contents);
+        double x = rc.Left + m.Pad, y = rc.Top - m.Pad - m.NameSize;
         sb.Append("BT\n");
-        sb.Append("/Helv 12 Tf ").Append(Col3(sig.Color)).Append(" rg\n");
-        sb.Append(F(x)).Append(' ').Append(F(top - 12)).Append(" Td (").Append(EscapePdf(sig.SignerName)).Append(") Tj\n");
-        double y = top - 12;
+        sb.Append("/Helv ").Append(F(m.NameSize)).Append(" Tf ").Append(Col3(sig.Color)).Append(" rg\n");
+        sb.Append(F(x)).Append(' ').Append(F(y)).Append(" Td (").Append(EscapePdf(sig.SignerName)).Append(") Tj\n");
         if (!string.IsNullOrWhiteSpace(sig.Contents))
         {
-            y -= 16;
-            sb.Append("/Helv 10 Tf 0.13 0.13 0.13 rg\n");
-            sb.Append("0 -16 Td (").Append(EscapePdf(sig.Contents!)).Append(") Tj\n");
+            sb.Append("/Helv ").Append(F(m.ReasonSize)).Append(" Tf 0.13 0.13 0.13 rg\n");
+            sb.Append("0 ").Append(F(-m.ReasonLead)).Append(" Td (").Append(EscapePdf(sig.Contents!)).Append(") Tj\n");
         }
-        sb.Append("/Helv 8 Tf 0.4 0.4 0.4 rg\n");
-        sb.Append("0 -14 Td (Signed ").Append(EscapePdf(sig.Signed.ToString("yyyy-MM-dd HH:mm"))).Append(") Tj\n");
+        sb.Append("/Helv ").Append(F(m.DateSize)).Append(" Tf 0.4 0.4 0.4 rg\n");
+        sb.Append("0 ").Append(F(-m.DateLead)).Append(" Td (Signed ")
+          .Append(EscapePdf(sig.Signed.ToString("yyyy-MM-dd HH:mm"))).Append(") Tj\n");
         sb.Append("ET\n");
         form.CreateStream(Encoding.ASCII.GetBytes(sb.ToString()));
 

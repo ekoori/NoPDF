@@ -16,6 +16,9 @@ namespace NoPdf.App.Views;
 public partial class DocumentView : UserControl
 {
     private ScrollViewer? _scroll;
+    // True while a document's view is being restored, so the scroll churn of the relayout
+    // isn't mistaken for the user scrolling.
+    private bool _applyingView;
     private bool _panning;
     private Point _panStartPointer;
     private Vector _panStartOffset;
@@ -83,7 +86,9 @@ public partial class DocumentView : UserControl
 
     private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
-        if (_vm is null) return;
+        // While a document is being laid out the offset passes through 0. Reacting to that
+        // would both reset its current page and overwrite the position we're restoring.
+        if (_vm is null || _applyingView) return;
         // Full view shows only the focused page(s); its page is driven by navigation.
         if (_vm.ViewMode == PageViewMode.Full) return;
         var sv = Scroll;
@@ -194,6 +199,7 @@ public partial class DocumentView : UserControl
         if (_vm is null) return;
         bool first = _vm.PendingInitialView;
         _vm.PendingInitialView = false;
+        _applyingView = true;   // ignore the scroll churn the relayout is about to cause
 
         // First display: the remembered-from-disk position. Later: where this tab was when
         // you last left it.
@@ -214,14 +220,38 @@ public partial class DocumentView : UserControl
                 _vm.FitForView(sv.Viewport.Width, sv.Viewport.Height, keep);
             else if (first) _vm.GoToPage(1);
 
-            Dispatcher.UIThread.Post(() =>
-            {
-                UpdateWrapPanel(); // panels are sized off the zoom we just set
-                var s = Scroll;
-                if (s is null) return;
-                s.Offset = saved is { } v2 ? new Vector(v2.OffsetX, v2.OffsetY) : default;
-            }, DispatcherPriority.Background);
+            UpdateWrapPanel(); // panels are sized off the zoom we just set
+            if (saved is { } v2) RestoreOffset(new Vector(v2.OffsetX, v2.OffsetY));
+            else if (first) RestoreOffset(default);
+            else _applyingView = false;   // nothing to put back
         }, DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// Puts the scroll offset back, once the panel has actually been laid out far enough to
+    /// hold it. Setting it any earlier silently clamps to zero — the relayout has thrown the
+    /// containers away and the extent isn't there yet — which sent every tab switch back to
+    /// page 1. Retries for a few frames, then takes what it can get.
+    /// </summary>
+    private void RestoreOffset(Vector want)
+    {
+        int tries = 0;
+        void Attempt()
+        {
+            var sv = Scroll;
+            if (sv is null) { _applyingView = false; return; }
+            double maxX = Math.Max(0, sv.Extent.Width - sv.Viewport.Width);
+            double maxY = Math.Max(0, sv.Extent.Height - sv.Viewport.Height);
+            if (++tries < 10 && (want.X > maxX + 0.5 || want.Y > maxY + 0.5))
+            {
+                Dispatcher.UIThread.Post(Attempt, DispatcherPriority.Background);
+                return;
+            }
+            sv.Offset = new Vector(Math.Clamp(want.X, 0, maxX), Math.Clamp(want.Y, 0, maxY));
+            // Let the scroll handler track the page again, from the position we just set.
+            Dispatcher.UIThread.Post(() => _applyingView = false, DispatcherPriority.Background);
+        }
+        Dispatcher.UIThread.Post(Attempt, DispatcherPriority.Loaded);
     }
 
     private DateTime _lastViewSave = DateTime.MinValue;

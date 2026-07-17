@@ -1096,21 +1096,20 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         return AnnotationWriter.SaveToBytes(_workingBytes, AnnotationsForSave());
     }
 
-    public Task SaveAsync(string? destPath = null)
+    /// <summary>Writes the document (annotations and form values baked in). Throws if it
+    /// can't — a save that fails quietly leaves the user believing their edits are on disk.</summary>
+    public async Task SaveAsync(string? destPath = null)
     {
         FlushFormValues();          // filled-in fields live in PDFium until pulled back out
         string dest = destPath ?? FilePath;
         var annots = AnnotationsForSave();
         var bytes = _workingBytes;
-        return Task.Run(() =>
+        await Task.Run(() =>
         {
             var outBytes = AnnotationWriter.SaveToBytes(bytes, annots);
             File.WriteAllBytes(dest, outBytes);
-        }).ContinueWith(t =>
-        {
-            if (t.IsCompletedSuccessfully)
-                Dispatcher.UIThread.Post(() => IsDirty = false);
         });
+        IsDirty = false;
     }
 
     public void MarkDirty() => IsDirty = true;

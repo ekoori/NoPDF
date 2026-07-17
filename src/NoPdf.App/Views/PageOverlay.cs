@@ -214,22 +214,30 @@ public sealed class PageOverlay : Control
         var color = Color.FromRgb(sig.Color.R, sig.Color.G, sig.Color.B);
         var logo = SigLogo();
         if (logo is not null)
-            // Stretched to the frame, matching what gets written into the PDF.
-            ctx.DrawImage(logo, new Rect(logo.Size), rect);
+        {
+            // Square logo, aspect kept and centred — matching the appearance stream that
+            // gets written into the PDF (stretching it would distort the mark).
+            double sq = Math.Min(rect.Width, rect.Height);
+            ctx.DrawImage(logo, new Rect(logo.Size),
+                new Rect(rect.X + (rect.Width - sq) / 2, rect.Y + (rect.Height - sq) / 2, sq, sq));
+        }
         ctx.DrawRectangle(null, FramePen(sig, color), rect);
 
+        // Type scaled to the frame, from the same metrics the writer uses.
+        var m = SignatureTextMetrics.For(sig.Rect.Width, sig.Rect.Height, sig.SignerName, sig.Contents);
         double s = _scale;
         void Line(string text, double fontSize, Color c, double y)
         {
             var ft = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
                 Typeface.Default, fontSize * s, new SolidColorBrush(c));
-            ctx.DrawText(ft, new Point(rect.X + 6, y));
+            ctx.DrawText(ft, new Point(rect.X + m.Pad * s, y));
         }
-        double top = rect.Y + 5;
-        Line(sig.SignerName, 12, color, top);
-        double yy = top + 14 * s;
-        if (!string.IsNullOrWhiteSpace(sig.Contents)) { Line(sig.Contents!, 10, Color.FromRgb(33, 33, 33), yy); yy += 15 * s; }
-        Line("Signed " + sig.Signed.ToString("yyyy-MM-dd HH:mm"), 8, Color.FromRgb(110, 110, 110), yy);
+        double top = rect.Y + m.Pad * s * 0.8;
+        Line(sig.SignerName, m.NameSize, color, top);
+        double yy = top + m.ReasonLead * s;
+        if (!string.IsNullOrWhiteSpace(sig.Contents))
+        { Line(sig.Contents!, m.ReasonSize, Color.FromRgb(33, 33, 33), yy); yy += m.DateLead * s; }
+        Line("Signed " + sig.Signed.ToString("yyyy-MM-dd HH:mm"), m.DateSize, Color.FromRgb(110, 110, 110), yy);
     }
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ImageAnnotation, Avalonia.Media.Imaging.Bitmap> _imgCache = new();

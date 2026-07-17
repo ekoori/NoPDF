@@ -60,8 +60,7 @@ public static class SignatureService
             PageIndex = 0,
             Rectangle = new XRect(0, 0, 0, 0), // invisible field; the visible stamp is separate
         };
-        var handler = DigitalSignatureHandler.ForDocument(doc, new CertSigner(cert), options);
-        AddSignerName(handler, doc, cert.GetNameInfo(X509NameType.SimpleName, false));
+        _ = DigitalSignatureHandler.ForDocument(doc, new CertSigner(cert), options);
         doc.Save(destPath);
     }
 

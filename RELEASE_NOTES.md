@@ -15,12 +15,16 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
   stored mask peaks at 33/255), which is invisible on white; it's now normalised to a
   readable watermark. It also **stretches to the signature frame** instead of sitting in a
   square at the left.
-- **Signed PDFs name the signer.** PDFsharp writes no `/Name` in the signature dictionary,
-  so viewers that show that entry (rather than reading the certificate) showed nobody. It's
-  written now — and the signature still verifies.
 - **Signature stamps show in other viewers.** The stamp carried a custom `/Name`, which on
   a stamp annotation names a *predefined* icon; viewers that honour it over the appearance
   stream drew nothing. Dropped — the appearance stream is authoritative.
+- **A signed document can be edited and saved again.** It always could, but a failed save
+  said nothing at all — `:save` swallowed the error and left the tab looking saved when
+  nothing had been written. Failures are now reported and the tab stays dirty. Editing a
+  signed file naturally invalidates its signature; `:siglist` says so plainly rather than
+  pretending otherwise.
+- The signature stamp's **logo keeps its shape** (centred, no longer stretched) and is
+  drawn at ~50% opacity, while the **name, reason and date scale to the frame** you draw.
 
 - **`Ctrl+Z` undoes your typing inside a form field.** PDFium keeps an edit history per
   field, so undo/redo now goes there while a field is focused and back to the document's

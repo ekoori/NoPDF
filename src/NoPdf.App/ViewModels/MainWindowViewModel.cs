@@ -882,9 +882,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private async Task SaveAsync()
     {
         if (SelectedTab is null) return;
-        await SelectedTab.SaveAsync();
-        ClearAutosave(SelectedTab.FilePath); // on-disk now matches; drop the recovery copy
-        StatusText = $"Saved {SelectedTab.Title}";
+        try
+        {
+            await SelectedTab.SaveAsync();
+            ClearAutosave(SelectedTab.FilePath); // on-disk now matches; drop the recovery copy
+            StatusText = $"Saved {SelectedTab.Title}";
+        }
+        // Say so, and leave the tab dirty: the edits are still only in memory.
+        catch (Exception ex) { StatusText = $"Save failed: {ex.Message}"; }
     }
 
     [RelayCommand]
