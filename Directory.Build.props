@@ -6,7 +6,7 @@
        auto-incremented on every Debug build (see Directory.Build.targets), so the
        app version is  0.0.X-beta.YY . -->
   <PropertyGroup>
-    <VersionPrefix>0.0.3</VersionPrefix>
+    <VersionPrefix>0.0.4</VersionPrefix>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 </Project>

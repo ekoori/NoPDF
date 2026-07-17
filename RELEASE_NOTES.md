@@ -5,7 +5,11 @@ local build number (raised on every build). Public releases are cut with
 `scripts/release.ps1 -Publish`, which bumps **X**, resets **YY** to `00`, and
 publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
-## Unreleased (0.0.3 line)
+## Unreleased (0.0.4 line)
+
+_Nothing yet._
+
+## v0.0.4-beta.00 - 2026-07-18
 
 - **Editing a signed document is now clearly flagged.** Verification says **"INVALID — the
   document was changed after it was signed"** (red) instead of the softer "cannot verify",
@@ -209,4 +213,5 @@ Signatures & fixes (earlier in the 0.0.2 line):
   Linux, and macOS (Intel + Apple Silicon). Keyboard-driven PDF viewer/editor:
   annotations, bookmarks, page ops, visible + cryptographic signatures,
   qutebrowser-style command line, theming, session persistence.
+
 
