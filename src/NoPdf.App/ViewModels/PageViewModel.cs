@@ -130,11 +130,20 @@ public sealed partial class PageViewModel : ViewModelBase
         });
     }
 
+    /// <summary>Zoom changed: resize the layout and redraw the overlay now (the existing
+    /// bitmap scales to fit instantly). The crisp re-render is deferred — see
+    /// <see cref="RerenderForScale"/> — so the whole spread zooms together.</summary>
     public void OnScaleChanged()
     {
         OnPropertyChanged(nameof(DisplayWidth));
         OnPropertyChanged(nameof(DisplayHeight));
         OverlayInvalidated?.Invoke();
+    }
+
+    /// <summary>Re-renders at the current scale if it has drifted from what's on screen.
+    /// Called (debounced) once zooming settles.</summary>
+    public void RerenderForScale()
+    {
         if (_isRealized && _renderedScale != _owner.Scale)
             EnsureRendered();
     }

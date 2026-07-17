@@ -284,6 +284,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             string reason = sig.Contents ?? "";
             await Task.Run(() => NoPdf.Core.Signing.SignatureService.Sign(bytes, dest, cert, reason, ""));
             sig.Certified = true;                  // succeeded — don't fire again
+            // Switch this tab over to the freshly-signed file, so the user is now looking at
+            // (and working on) what was actually written and signed.
+            await OpenInCurrentTabAsync(dest);
             StatusText = $"Signed & certified → {Path.GetFileName(dest)}";
         }
         catch (Exception ex) { StatusText = "Sign failed: " + ex.Message; }
@@ -654,6 +657,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         doc.ViewModeSink = (m, n) => ViewStates.SetMode(path, m, n);
         doc.CertifyRequested = sig => CertifySignature(doc, sig);
         doc.StatusSink = msg => { if (doc.IsActive) StatusText = msg; };
+        // The signatures panel is a snapshot; re-verify when the file on disk changes so it
+        // doesn't keep showing a stale "valid" after the document has been edited.
+        doc.Saved += () => { if (doc.IsActive && IsSignaturePanelOpen) RefreshDocumentSignatures(); };
         doc.OpenUriRequested += OpenExternalUri;
         doc.RecoverBytes = _autosave.TryLoad(path); // unsaved edits from a previous run
     }

@@ -7,6 +7,18 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
 ## Unreleased (0.0.3 line)
 
+- **Editing a signed document is now clearly flagged.** Verification says **"INVALID — the
+  document was changed after it was signed"** (red) instead of the softer "cannot verify",
+  and the signatures panel **re-checks itself after a save**, so it no longer keeps showing
+  a stale "valid" once you've edited and saved the file.
+- **Switching tabs keeps each document where you left it** — the scroll position and page no
+  longer reset to page 1. (The shared scroll viewer resets to 0 during the swap, and that
+  was overwriting the incoming tab's remembered position before it could be restored.)
+- **Smoother zooming.** Pages now resize together and instantly (the shown image scales),
+  with the crisp re-render deferred until zooming settles — instead of each page popping
+  back in one at a time, which read as jittery.
+- **After certifying with a certificate, the tab switches to the signed file**, so you're
+  looking at and working on what was actually written and signed.
 - **`:view` is per tab again.** The page view is recycled between tabs, and only the first
   display of a document applied its mode — so a `:view` command appeared to change every
   tab, and switching around left documents in each other's layouts. Each tab now re-asserts

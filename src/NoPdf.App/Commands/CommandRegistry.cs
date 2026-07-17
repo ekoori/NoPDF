@@ -574,10 +574,8 @@ public sealed class CommandRegistry
                 : $"{stamps.Count} visible stamp(s), no digital signature";
 
         // Lead with the worst verdict — that's the one worth knowing about.
-        static bool IsBroken(NoPdf.Core.Signing.SignatureInfo i)
-            => i.Error is not null || (i.IntegrityChecked && !i.IntegrityOk);
-        int bad = verified.Count(v => IsBroken(v.Info));
-        int weak = verified.Count(v => !IsBroken(v.Info) && !v.Info.IsFullyValid);
+        int bad = verified.Count(v => v.Info.IsBroken);
+        int weak = verified.Count(v => !v.Info.IsBroken && !v.Info.IsFullyValid);
         string verdict = bad > 0 ? $"{bad} INVALID"
             : weak > 0 ? $"{weak} unverified"
             : "all valid";

@@ -98,7 +98,9 @@ public partial class DocumentView : UserControl
             : LeadingPageVertical(sv);
         if (best >= 0) _vm.SetCurrentPageSilent(best + 1);
 
-        // Throttle persistence of the view position.
+        // Always keep the in-memory position current, so switching tabs returns exactly
+        // here; only the disk persistence is throttled.
+        _vm.SetLiveView(_vm.ZoomPercent / 100.0, sv.Offset.X, sv.Offset.Y);
         var now = DateTime.UtcNow;
         if ((now - _lastViewSave).TotalMilliseconds > 400)
         {
@@ -144,8 +146,8 @@ public partial class DocumentView : UserControl
     {
         if (_vm is not null)
         {
-            // Remember where this document was before it leaves the (shared) view, so
-            // switching back to its tab returns to the same spot.
+            // Persist the outgoing document's position (LastView is already current from
+            // scrolling; this also writes it to the on-disk store).
             SaveViewState();
             _vm.PropertyChanged -= OnVmPropertyChanged;
             _vm.ScrollToPageRequested -= OnScrollToPage;
@@ -158,6 +160,10 @@ public partial class DocumentView : UserControl
         _vm = DataContext as DocumentViewModel;
         if (_vm is not null)
         {
+            // Guard synchronously, before the ItemsSource rebind resets the shared scroll
+            // viewer to 0 — otherwise that reset fires OnScrollChanged and overwrites this
+            // document's remembered position with (0,0), sending it back to page 1.
+            _applyingView = true;
             _vm.PropertyChanged += OnVmPropertyChanged;
             _vm.ScrollToPageRequested += OnScrollToPage;
             _vm.FitWidthRequested += OnFitWidth;
@@ -196,13 +202,14 @@ public partial class DocumentView : UserControl
     /// </summary>
     private void ApplyViewForDoc()
     {
-        if (_vm is null) return;
+        if (_vm is null) { _applyingView = false; return; }
+        _applyingView = true;   // ignore the scroll churn the relayout is about to cause
         bool first = _vm.PendingInitialView;
         _vm.PendingInitialView = false;
-        _applyingView = true;   // ignore the scroll churn the relayout is about to cause
 
         // First display: the remembered-from-disk position. Later: where this tab was when
-        // you last left it.
+        // you last left it. Either way we ALWAYS position the document — never leave it at
+        // whatever offset the previously shown tab left in the shared scroll viewer.
         var saved = first ? _vm.InitialView : _vm.LastView;
         if (first) _vm.InitialView = null;
         int keep = _vm.CurrentPage;
@@ -211,19 +218,17 @@ public partial class DocumentView : UserControl
 
         Dispatcher.UIThread.Post(() =>
         {
-            if (_vm is null) return;
+            if (_vm is null) { _applyingView = false; return; }
             var sv = Scroll;
             bool modeOwnsZoom = _vm.ViewMode != PageViewMode.Scroll || _vm.PagesPerRow > 1;
 
             if (saved is { } v) _vm.SetZoom(v.Zoom);
             else if (modeOwnsZoom && sv is { Viewport.Width: > 0, Viewport.Height: > 0 } && !_vm.ManualZoom)
                 _vm.FitForView(sv.Viewport.Width, sv.Viewport.Height, keep);
-            else if (first) _vm.GoToPage(1);
+            // else: plain scroll with no saved position — keep the zoom, go to the top.
 
             UpdateWrapPanel(); // panels are sized off the zoom we just set
-            if (saved is { } v2) RestoreOffset(new Vector(v2.OffsetX, v2.OffsetY));
-            else if (first) RestoreOffset(default);
-            else _applyingView = false;   // nothing to put back
+            RestoreOffset(saved is { } v2 ? new Vector(v2.OffsetX, v2.OffsetY) : default);
         }, DispatcherPriority.Background);
     }
 

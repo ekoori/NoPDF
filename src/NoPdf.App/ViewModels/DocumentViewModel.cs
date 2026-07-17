@@ -74,6 +74,10 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     /// — otherwise it inherits whatever the other tab left behind.</summary>
     public (double Zoom, double OffsetX, double OffsetY)? LastView { get; private set; }
 
+    /// <summary>Records the live position in memory (cheap, every scroll) so a tab switch
+    /// can return here. The disk write is separate and throttled.</summary>
+    public void SetLiveView(double zoom, double ox, double oy) => LastView = (zoom, ox, oy);
+
     public void ReportViewState(double zoom, double ox, double oy)
     {
         LastView = (zoom, ox, oy);
@@ -89,6 +93,10 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
     /// <summary>Set by the host so the document can report to the status bar.</summary>
     public Action<string>? StatusSink { get; set; }
+
+    /// <summary>Raised after the document is written to disk, so anything derived from the
+    /// file (e.g. signature verification) can be refreshed.</summary>
+    public event Action? Saved;
 
     /// <summary>Name printed on new signatures (from config or active preset).</summary>
     public string SignerName { get; set; } = "";
@@ -227,7 +235,32 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         _zoom = zoom;
         OnPropertyChanged(nameof(Scale));
         OnPropertyChanged(nameof(ZoomPercent));
+        // Resize every page's layout at once — the existing bitmap scales to fit instantly,
+        // so the whole spread zooms together and smoothly. The crisp re-render is deferred:
+        // re-rendering on every step made pages pop back in one at a time (the jitter).
         foreach (var p in Pages) p.OnScaleChanged();
+        ScheduleRerender();
+    }
+
+    private Avalonia.Threading.DispatcherTimer? _rerenderTimer;
+
+    /// <summary>Re-renders the pages at the new zoom once it stops changing, so a burst of
+    /// zoom steps produces one crisp update for all pages together instead of a per-page
+    /// flicker as each finishes.</summary>
+    private void ScheduleRerender()
+    {
+        if (_rerenderTimer is null)
+        {
+            _rerenderTimer = new Avalonia.Threading.DispatcherTimer
+            { Interval = TimeSpan.FromMilliseconds(110) };
+            _rerenderTimer.Tick += (_, _) =>
+            {
+                _rerenderTimer!.Stop();
+                foreach (var p in Pages) p.RerenderForScale();
+            };
+        }
+        _rerenderTimer.Stop();
+        _rerenderTimer.Start();
     }
 
     public void SetZoomPercent(double percent) => SetZoom(percent / 100.0);
@@ -1110,6 +1143,7 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
             File.WriteAllBytes(dest, outBytes);
         });
         IsDirty = false;
+        Saved?.Invoke();
     }
 
     public void MarkDirty() => IsDirty = true;
@@ -1395,6 +1429,8 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        _rerenderTimer?.Stop();
+        _rerenderTimer = null;
         Document?.Dispose();
         Document = null;
     }

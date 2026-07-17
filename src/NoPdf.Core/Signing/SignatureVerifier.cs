@@ -18,6 +18,8 @@ namespace NoPdf.Core.Signing;
 /// means bytes were appended after signing: a later signature/edit, or tampering.</param>
 /// <param name="ChainTrusted">The signing certificate chains to a root this machine trusts.</param>
 /// <param name="ChainStatus">Why the chain isn't trusted (e.g. self-signed), or "trusted".</param>
+/// <param name="ModifiedAfterSigning">The file was rewritten after this signature was
+/// applied (its byte range no longer lines up), so the signature no longer covers it.</param>
 /// <param name="Note">A structural problem that stopped integrity being checked, or null.</param>
 /// <param name="Error">Set when the signature couldn't be parsed at all.</param>
 public sealed record SignatureInfo(
@@ -28,11 +30,16 @@ public sealed record SignatureInfo(
     bool CoversWholeFile,
     bool ChainTrusted,
     string ChainStatus,
+    bool ModifiedAfterSigning = false,
     string? Note = null,
     string? Error = null)
 {
     /// <summary>True only when nothing is wrong: intact, complete and trusted.</summary>
     public bool IsFullyValid => Error is null && IntegrityChecked && IntegrityOk && CoversWholeFile && ChainTrusted;
+
+    /// <summary>The signature is definitely not valid for this file — content changed under
+    /// it, the file was re-saved after signing, or the CMS is unreadable.</summary>
+    public bool IsBroken => Error is not null || ModifiedAfterSigning || (IntegrityChecked && !IntegrityOk);
 
     /// <summary>One line fit for the signatures panel.</summary>
     public string Summary
@@ -43,12 +50,14 @@ public sealed record SignatureInfo(
                 return Signer is "(unknown signer)" or "(unknown)"
                     ? "cannot read signature: " + Error
                     : $"signed by {Signer}, but it could not be read: {Error}";
+            if (ModifiedAfterSigning)
+                return "INVALID — the document was changed after it was signed";
             if (!IntegrityChecked)
                 return $"cannot verify — {Note ?? "malformed signature"}; certificate {ChainStatus}";
             if (!IntegrityOk)
-                return "INVALID — content changed after signing";
+                return "INVALID — the document was changed after it was signed";
             if (!CoversWholeFile)
-                return $"intact, but the file was appended to after signing; certificate {ChainStatus}";
+                return $"intact, but more was added to the file after signing; certificate {ChainStatus}";
             return ChainTrusted
                 ? "valid — intact and the certificate is trusted"
                 : $"intact, but the certificate is not trusted ({ChainStatus})";
@@ -80,7 +89,7 @@ public static class SignatureVerifier
             try { results.Add(VerifyOne(pdf, lt, gt)); }
             catch (Exception ex)
             {
-                results.Add(new SignatureInfo("(unknown)", null, false, false, false, false, "", null, ex.Message));
+                results.Add(new SignatureInfo("(unknown)", null, false, false, false, false, "", Error: ex.Message));
             }
         }
         return results;
@@ -110,19 +119,20 @@ public static class SignatureVerifier
         var br = FindByteRangeNear(pdf, lt, gt);
         if (br is not { } range)
             return new SignatureInfo(name, when, false, false, false, trusted, chainStatus,
-                "no byte range");
+                Note: "no byte range");
 
         var (a, b, c, d) = range;
         // The byte range must actually bracket THIS /Contents string (span 1 ends at the
         // '<', span 2 starts at the '>'), and stay inside the file. If it doesn't, the
-        // offsets are stale — the file was re-saved after signing — and integrity is
-        // unknowable from here.
+        // offsets are stale — the file was re-saved after signing — so the signature no
+        // longer covers this document.
         bool brackets = Math.Abs(a + b - lt) <= 1 && Math.Abs(c - (gt + 1)) <= 1;
         bool inBounds = a >= 0 && b >= 0 && c >= a + b && d >= 0 && (long)c + d <= pdf.Length;
         if (!brackets || !inBounds)
             return new SignatureInfo(name, when, false, false, false, trusted, chainStatus,
-                !inBounds ? "byte range runs past the end of the file (re-saved after signing?)"
-                          : "byte range does not match the signature (re-saved after signing?)");
+                ModifiedAfterSigning: true,
+                Note: !inBounds ? "byte range runs past the end of the file"
+                                : "byte range no longer matches the signed content");
 
         // Re-hash the two signed spans exactly as the signer saw them.
         var content = new byte[b + d];

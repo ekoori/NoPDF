@@ -18,16 +18,13 @@ public sealed class DocumentSignatureItem
 
     public string Summary => Info.Summary;
 
-    /// <summary>Red only when we know the content changed (or the CMS is unreadable);
-    /// green when nothing is wrong; amber for the middle ground — untrusted, appended to,
-    /// or a malformed byte range we couldn't check.</summary>
-    public IBrush StatusColor => IsBroken ? Brushes.Red
+    /// <summary>Red when the signature is broken — the document changed after signing, or
+    /// the CMS is unreadable; green when nothing is wrong; amber for the middle ground —
+    /// untrusted, or appended to.</summary>
+    public IBrush StatusColor => Info.IsBroken ? Brushes.Red
         : Info.IsFullyValid ? Green : Amber;
 
-    public string Badge => IsBroken ? "✕" : Info.IsFullyValid ? "✓" : "!";
-
-    /// <summary>Definitely bad: unreadable, or integrity was checked and failed.</summary>
-    private bool IsBroken => Info.Error is not null || (Info.IntegrityChecked && !Info.IntegrityOk);
+    public string Badge => Info.IsBroken ? "✕" : Info.IsFullyValid ? "✓" : "!";
 
     private static readonly IBrush Green = new SolidColorBrush(Color.FromRgb(0x43, 0xA0, 0x47));
     private static readonly IBrush Amber = new SolidColorBrush(Color.FromRgb(0xFB, 0x8C, 0x00));
