@@ -8,7 +8,8 @@ Everything development-related lives here. User documentation is in
 - **.NET 10 SDK**
 - Optional: [GitHub CLI](https://cli.github.com) (`gh auth login`) — only needed to
   publish a release
-- Optional: DjVuLibre's `ddjvu` on `PATH` — only to open `.djvu` files
+- Optional: DjVuLibre's `ddjvu` on `PATH` — a fallback only; `.djvu` files decode
+  in-process via the vendored DjvuNet decoder without it
 
 ## Build & run
 

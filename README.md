@@ -7,7 +7,7 @@ hotkeys rather than toolbars and dialogs.
 
 Annotations are saved as standard PDF objects, so they open in Acrobat and every
 other viewer. Besides PDF, noPDF opens **CBZ/CBR/CB7/CBT** comic archives and
-**DjVu** documents (converted to PDF on load).
+**DjVu** documents (decoded in-process — no external tools needed).
 
 ## Install
 
