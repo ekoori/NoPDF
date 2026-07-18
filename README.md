@@ -56,7 +56,11 @@ which-key hint until you complete it.
   verifies what's already in a document.
 - **Bookmarks** — the PDF outline plus your own, written into the file itself.
 - **Page operations** — a thumbnails panel with multi-select for rotate,
-  reorder, delete, insert and merge; export page ranges.
+  reorder, delete, insert and merge; export page ranges. `:newfile` starts an empty
+  document and `:newpage [size]` adds a blank page after the current one — `a4`, `a3`,
+  `a5`, `letter`, `legal`, an `l` suffix for landscape, or millimetres as `200x150`.
+- **Flatten** (`:flatten`) — bakes annotations and filled form fields into the page
+  itself, so they're no longer separate objects anyone can move or delete.
 - **Printing** with named presets.
 - **Undo/redo** across annotations, page operations, bookmarks, form fields, and
   closed tabs.
@@ -125,7 +129,7 @@ The highlights:
 
 | Area | Commands |
 |------|----------|
-| **Files / tabs** | `open` (`o`), `O`/`tabnew`, `tabnext`, `tabprev`, `tabclose`, `close`, `quit`, `reopen`, `reload`, `copypath` |
+| **Files / tabs** | `open` (`o`), `newfile`, `O`/`tabnew`, `tabnext`, `tabprev`, `tabclose`, `close`, `quit`, `reopen`, `reload`, `copypath` |
 | **Save / print** | `save` (`w`) `[path]`, `saveas [path]`, `print [preset] [range]`, `printdialog`, `printpreset` |
 | **Sessions** | `session save\|load\|del\|list <name>` |
 | **Navigate** | `page <n\|first\|last\|next\|prev>`, `scrollup`/`scrolldown`/`scrollleft`/`scrollright`, `scrollpageup`/`scrollpagedown`, `hint` (`f`) |
@@ -133,7 +137,7 @@ The highlights:
 | **Find** | `find <text>` (`/`), `findnext` (`n`), `findprev` (`N`) |
 | **Tools** | `hand`, `select`, `highlight`, `note`, `textbox`, `callout`, `line`, `rect`, `arrow`, `polyline`, `sign` |
 | **Edit** | `undo`, `redo`, `copy`, `delannot`, `yank`/`paste`, `group`/`ungroup` |
-| **Pages** | `rotate <range> [cw\|ccw\|180]`, `delete <range>`, `insert <path> [at]`, `merge <path>`, `extract <range> [path]` |
+| **Pages** | `rotate <range> [cw\|ccw\|180]`, `delete <range>`, `insert <path> [at]`, `newpage [size]`, `merge <path>`, `extract <range> [path]`, `flatten` |
 | **Panels** | `toc` (`b`), `pages` (`P`), `props`, `annots`, `signatures`, `toolbar`, `tabspanel [top\|bottom\|left\|right]` |
 | **Marks** | `m`/`go <name>` (file quickmarks), `marks`, `bookmark`/`bmdel <name>` |
 | **Config** | `config`, `bind <key> <command>`, `version`, `help` |

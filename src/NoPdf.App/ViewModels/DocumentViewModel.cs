@@ -152,6 +152,26 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     /// <summary>A tab that has not read its file yet — the content loads on first display.</summary>
     public static DocumentViewModel CreateDeferred(string filePath) => new(filePath);
 
+    /// <summary>
+    /// True until the document has somewhere on disk to be saved to. Everything keyed by path
+    /// — the session, per-file view state, autosave recovery — has to leave these alone, and
+    /// <c>:save</c> has to ask for a location the first time.
+    /// </summary>
+    public bool IsUntitled => string.IsNullOrEmpty(FilePath);
+
+    /// <summary>A brand-new document that exists only in memory.</summary>
+    public static DocumentViewModel CreateNew(byte[] pdfBytes, string title)
+    {
+        var vm = new DocumentViewModel("") { Title = title };
+        var (cleaned, models) = AnnotationReader.LoadAndStrip(pdfBytes);
+        vm.Document = PdfDocument.OpenBytes(cleaned, title);
+        vm._workingBytes = cleaned;
+        vm.BuildPages(models);
+        vm.OnPropertyChanged(nameof(PageCount));
+        vm.OnPropertyChanged(nameof(PageLabel));
+        return vm;
+    }
+
     public static async Task<DocumentViewModel> LoadAsync(string filePath)
     {
         var vm = new DocumentViewModel(filePath);
@@ -1259,6 +1279,46 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         for (int i = atIndex; i < PageCount; i++) order.Add(i);
         Rebuild(nb, order);
         return otherCount;
+    }
+
+    /// <summary>Inserts one blank page at the given index. Returns its page number.</summary>
+    public int InsertBlankPage(int atIndex, double widthPt, double heightPt)
+    {
+        BeginChange();
+        int at = Math.Clamp(atIndex, 0, PageCount);
+        var nb = PageOps.InsertBlank(_workingBytes, at, widthPt, heightPt);
+        var order = new List<int>();
+        for (int i = 0; i < at; i++) order.Add(i);
+        order.Add(-1);                                  // the new page carries no annotations
+        for (int i = at; i < PageCount; i++) order.Add(i);
+        Rebuild(nb, order);
+        return at + 1;
+    }
+
+    /// <summary>The size of a page, in points.</summary>
+    public (double widthPt, double heightPt) PageSize(int index)
+    {
+        var s = Document!.GetPageSize(Math.Clamp(index, 0, PageCount - 1));
+        return (s.Width, s.Height);
+    }
+
+    /// <summary>
+    /// Draws every annotation and form field into the page content, so they stop being separate
+    /// objects and become part of the page. Returns how many were baked in.
+    /// </summary>
+    public int FlattenAnnotations()
+    {
+        BeginChange();
+        // Write the annotations and form values out as real PDF objects first — flattening
+        // works from appearance streams, which is what gives an identical-looking result.
+        var withAnnots = ExportWithAnnotations();
+        var flat = PdfFlattener.Flatten(withAnnots);
+        int count = PdfFlattener.LastFlattenedCount;
+
+        // Every page keeps its content but loses its annotation models: they live in the page
+        // now, so carrying the editable copies over would draw them a second time on save.
+        Rebuild(flat, Enumerable.Repeat(-1, PageCount).ToList());
+        return count;
     }
 
     public void MergeFile(string path)

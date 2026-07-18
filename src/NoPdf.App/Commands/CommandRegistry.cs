@@ -83,6 +83,9 @@ public sealed class CommandRegistry
             ["extract"] = Extract,
             ["insert"] = Insert,
             ["merge"] = Merge,
+            ["newfile"] = (_, _) => Msg(_main.NewFile()),
+            ["newpage"] = NewPage,
+            ["flatten"] = (_, _) => Msg(Flatten()),
             ["undo"] = (_, _) => { _main.Undo(); return Msg(null); },
             ["redo"] = (_, _) => Task.FromResult(DoRedo()),
             ["reopen"] = (_, _) => { _main.ReopenClosedTab(); return Msg(null); },
@@ -445,6 +448,55 @@ public sealed class CommandRegistry
         return $"Inserted {Path.GetFileName(path)}";
     }
 
+    /// <summary>
+    /// Inserts a blank page after the current one. With no size given it matches the page you
+    /// are on, so adding a page to a Letter document doesn't hand you an A4 one.
+    /// </summary>
+    private Task<string?> NewPage(string[] args, string rest)
+    {
+        var doc = Doc;
+        if (doc is null) return Msg("No document");
+
+        double widthPt, heightPt;
+        string spec = rest.Trim();
+        if (spec.Length == 0)
+        {
+            (widthPt, heightPt) = doc.PageSize(doc.CurrentPage - 1);
+        }
+        else if (!NoPdf.Core.Editing.PageSizes.TryParse(spec, out widthPt, out heightPt, out string? error))
+        {
+            return Msg(error);
+        }
+
+        int at = doc.InsertBlankPage(doc.CurrentPage, widthPt, heightPt);
+        doc.GoToPage(at);   // land on the page that was just made
+        double mmW = widthPt / 72 * 25.4, mmH = heightPt / 72 * 25.4;
+        return Msg($"Blank page {at} ({mmW:F0}×{mmH:F0} mm)");
+    }
+
+    /// <summary>
+    /// Bakes annotations and form fields into the pages. Signatures are the awkward case:
+    /// flattening rewrites page content, which invalidates them — so it says so plainly rather
+    /// than leaving a document that silently no longer verifies.
+    /// </summary>
+    private string Flatten()
+    {
+        var doc = Doc;
+        if (doc is null) return "No document";
+
+        int signatures = 0;
+        try { signatures = NoPdf.Core.Signing.SignatureVerifier.Verify(doc.ExportWithAnnotations()).Count; }
+        catch { /* if it can't be checked, don't block flattening on it */ }
+
+        int n = doc.FlattenAnnotations();
+        if (n == 0) return "Nothing to flatten";
+
+        string msg = $"Flattened {n} annotation{(n == 1 ? "" : "s")} into the page content";
+        if (signatures > 0)
+            msg += $" — this invalidates {signatures} existing signature{(signatures == 1 ? "" : "s")}; undo with u if that wasn't intended";
+        return msg;
+    }
+
     private async Task<string?> Merge(string[] args, string rest)
     {
         var doc = Doc;
@@ -489,6 +541,9 @@ public sealed class CommandRegistry
         if (doc is null) return "No document";
         // `:w <file>` writes elsewhere and the tab becomes that file.
         string? dest = args.Length > 0 ? Tokenize(rest).FirstOrDefault() : null;
+        // A document from :newfile has nowhere to be written yet, so the first :save has to
+        // ask — the same as :saveas.
+        if (dest is null && doc.IsUntitled) return await SaveAs(args, rest);
         await doc.SaveAsync(dest);
         if (dest is null) { _main.ClearAutosave(doc.FilePath); return "Saved"; }
         _main.RebindDoc(doc, dest);
@@ -503,7 +558,8 @@ public sealed class CommandRegistry
         if (dest is null)
         {
             string dir = Path.GetDirectoryName(doc.FilePath) ?? "";
-            string name = Path.GetFileName(doc.FilePath);
+            // An untitled document has no filename to suggest, so offer its tab title.
+            string name = doc.IsUntitled ? doc.Title + ".pdf" : Path.GetFileName(doc.FilePath);
             dest = await _main.PickSaveAs(dir, name);
             if (dest is null) return "Cancelled";
         }

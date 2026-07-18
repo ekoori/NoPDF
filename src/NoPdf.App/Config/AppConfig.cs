@@ -83,6 +83,10 @@ public sealed class AppConfig
     public int ScrollRows { get; set; } = 3;
 
     // Text-box annotation defaults.
+    /// <summary>Page size for a document created with <c>:newfile</c>. Accepts the same names
+    /// as <c>:newpage</c> (see NoPdf.Core.Editing.PageSizes); an unusable value falls back to A4.</summary>
+    public string DefaultPageSize { get; set; } = "a4";
+
     public double TextboxFontSize { get; set; } = 14;
     public string TextboxFrameColor { get; set; } = "#1E6EDC";
     public double TextboxFrameOpacity { get; set; } = 1.0;
@@ -264,6 +268,10 @@ print_fit_to_page: true   # scale pages to fill the paper
 print_grayscale: false
 print_landscape: false
 scroll_rows: 3
+
+# Page size for a new document made with :newfile. Named sizes are a3, a4, a5, letter and
+# legal, with an "l" suffix for landscape (a4l); or give millimetres as WxH, e.g. 200x200.
+default_page_size: a4
 
 # Text-box annotation defaults.
 textbox_font_size: 14

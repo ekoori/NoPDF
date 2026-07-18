@@ -7,6 +7,17 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
 ## Unreleased (0.0.4 line)
 
+- **New documents and blank pages.** `:newfile` opens an empty document in a new tab, at the
+  size set by `default_page_size` in config.yaml (A4 unless you change it); it lives in memory
+  until the first `:save`, which asks where to put it. `:newpage [size]` adds a blank page
+  after the current one — `a4`, `a3`, `a5`, `letter` or `legal`, an `l` suffix for landscape
+  (`a4l`), or millimetres as `WxH` (`200x150`). With no size it matches the page you're on.
+- **`:flatten`** bakes annotations and filled form fields into the page content, so they stop
+  being separate objects that can be selected, moved or deleted. It draws each annotation's own
+  appearance, so a flattened page renders identically to the unflattened one. It's undoable
+  until you save; note that it rewrites page content, so it does invalidate any existing
+  signature — the status bar says so when that applies.
+
 - **DjVu opens with no external tool.** A pure-managed DjVu decoder (the vendored, MIT-licensed
   [DjvuNet](https://github.com/DjvuNet/DjvuNet), `src/third_party/DjvuNet`) is built in, so
   `.djvu`/`.djv` files work out of the box on every platform — no more "install DjVuLibre".

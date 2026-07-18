@@ -83,6 +83,23 @@ public static class PageOps
     }
 
     /// <summary>Inserts all pages of <paramref name="other"/> before <paramref name="atIndex"/>.</summary>
+    /// <summary>A new document of blank pages at the given size, in points.</summary>
+    public static byte[] CreateBlank(double widthPt, double heightPt, int pageCount = 1)
+    {
+        using var doc = new PdfDocument();
+        for (int i = 0; i < Math.Max(1, pageCount); i++)
+        {
+            var page = doc.AddPage();
+            page.Width = PdfSharp.Drawing.XUnit.FromPoint(widthPt);
+            page.Height = PdfSharp.Drawing.XUnit.FromPoint(heightPt);
+        }
+        return ToBytes(doc);
+    }
+
+    /// <summary>Inserts one blank page at the given index.</summary>
+    public static byte[] InsertBlank(byte[] source, int atIndex, double widthPt, double heightPt)
+        => Insert(source, CreateBlank(widthPt, heightPt), atIndex);
+
     public static byte[] Insert(byte[] source, byte[] other, int atIndex)
     {
         using var s1 = new MemoryStream(source);

@@ -92,7 +92,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         foreach (var t in Tabs.ToList())
         {
-            if (!t.IsLoaded || !t.IsDirty) continue;
+            // Autosave is keyed by path and recovered by reopening that file, so a document
+            // that has never been saved has nothing to recover into.
+            if (!t.IsLoaded || !t.IsDirty || t.IsUntitled) continue;
             try { _autosave.Save(t.FilePath, t.ExportWithAnnotations()); }
             catch { /* never let autosave break the app */ }
         }
@@ -577,7 +579,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (_restoring) return;
         Session.Save(new SessionStore.SessionData
         {
-            Files = Tabs.Select(t => t.FilePath).ToList(),
+            // An unsaved :newfile tab has no path to restore from, so it stays out.
+            Files = Tabs.Where(t => !t.IsUntitled).Select(t => t.FilePath).ToList(),
             Active = SelectedTab is not null ? Tabs.IndexOf(SelectedTab) : -1,
         });
     }
@@ -588,7 +591,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public void SaveNamedSession(string name)
         => Session.SaveNamed(name, new SessionStore.SessionData
         {
-            Files = Tabs.Select(t => t.FilePath).ToList(),
+            // An unsaved :newfile tab has no path to restore from, so it stays out.
+            Files = Tabs.Where(t => !t.IsUntitled).Select(t => t.FilePath).ToList(),
             Active = SelectedTab is not null ? Tabs.IndexOf(SelectedTab) : -1,
         });
 
@@ -656,23 +660,49 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         doc.TextboxFrameColor = Config.TextboxFrameColorValue;
         doc.TextboxFrameOpacity = Config.TextboxFrameOpacity;
         ApplyPresetToDoc(doc);
-        var saved = ViewStates.Get(path);
-        if (saved is not null)
+
+        // A document that has never been saved has no path to key any of this by. It picks all
+        // of it up once :save gives it a name (see RebindDoc).
+        if (!string.IsNullOrEmpty(path))
         {
-            doc.InitialView = (saved.Zoom, saved.OffsetX, saved.OffsetY);
-            // The view lays this out on first display; the sinks go on afterwards so
-            // restoring doesn't write straight back.
-            if (!string.IsNullOrEmpty(saved.Mode)) doc.SetView(saved.Mode, saved.Pages);
+            var saved = ViewStates.Get(path);
+            if (saved is not null)
+            {
+                doc.InitialView = (saved.Zoom, saved.OffsetX, saved.OffsetY);
+                // The view lays this out on first display; the sinks go on afterwards so
+                // restoring doesn't write straight back.
+                if (!string.IsNullOrEmpty(saved.Mode)) doc.SetView(saved.Mode, saved.Pages);
+            }
+            doc.ViewStateSink = (z, x, y) => ViewStates.Set(path, z, x, y);
+            doc.ViewModeSink = (m, n) => ViewStates.SetMode(path, m, n);
+            doc.RecoverBytes = _autosave.TryLoad(path); // unsaved edits from a previous run
         }
-        doc.ViewStateSink = (z, x, y) => ViewStates.Set(path, z, x, y);
-        doc.ViewModeSink = (m, n) => ViewStates.SetMode(path, m, n);
         doc.CertifyRequested = sig => CertifySignature(doc, sig);
         doc.StatusSink = msg => { if (doc.IsActive) StatusText = msg; };
         // The signatures panel is a snapshot; re-verify when the file on disk changes so it
         // doesn't keep showing a stale "valid" after the document has been edited.
         doc.Saved += () => { if (doc.IsActive && IsSignaturePanelOpen) RefreshDocumentSignatures(); };
         doc.OpenUriRequested += OpenExternalUri;
-        doc.RecoverBytes = _autosave.TryLoad(path); // unsaved edits from a previous run
+    }
+
+    /// <summary>
+    /// Opens a new, empty document in its own tab. It lives only in memory until it is saved,
+    /// at which point <see cref="RebindDoc"/> gives it a path and everything keyed by one.
+    /// </summary>
+    public string NewFile()
+    {
+        var (widthPt, heightPt) = NoPdf.Core.Editing.PageSizes.ParseOrA4(Config.DefaultPageSize);
+        var bytes = NoPdf.Core.Editing.PageOps.CreateBlank(widthPt, heightPt);
+
+        // Number the untitled tabs so two of them are tellable apart.
+        int n = 1;
+        while (Tabs.Any(t => t.Title == $"Untitled {n}")) n++;
+
+        var doc = DocumentViewModel.CreateNew(bytes, $"Untitled {n}");
+        ConfigureDoc(doc, "");
+        Tabs.Add(doc);
+        SelectedTab = doc;
+        return $"New {Config.DefaultPageSize.ToLowerInvariant()} document — :save to name it";
     }
 
     /// <summary>

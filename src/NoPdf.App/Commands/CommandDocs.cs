@@ -26,6 +26,8 @@ public static class CommandDocs
     {
         // ----- File -----
         new CommandDoc("open", "File", "<path|mark>…", "Open file(s) — the first replaces the current tab", "o"),
+        new CommandDoc("newfile", "File", "",
+            "New empty document in a new tab (size from default_page_size); :save names it"),
         new CommandDoc("O", "File", "<path|mark>…", "Open file(s) in a new tab", "opentab", "tabnew"),
         new CommandDoc("save", "File", "[path]", "Write annotations back to the file", "w"),
         new CommandDoc("saveas", "File", "[path]", "Save a copy (asks if no path given)"),
@@ -82,6 +84,10 @@ public static class CommandDocs
         new CommandDoc("insert", "Pages", "<path> [at]", "Insert another PDF's pages"),
         new CommandDoc("merge", "Pages", "<path>", "Append another PDF"),
         new CommandDoc("extract", "Pages", "<range> [path]", "Export pages to a new PDF (asks if no path)"),
+        new CommandDoc("newpage", "Pages", "[size]",
+            "Blank page after this one (a4|a3|a5|letter|legal, +l for landscape, or WxH in mm; default: this page's size)"),
+        new CommandDoc("flatten", "Pages", "",
+            "Bake annotations and form fields into the page content"),
 
         // ----- Annotations -----
         new CommandDoc("select", "Annotations", "", "Select tool: pick text or annotations (default)", "sel"),
