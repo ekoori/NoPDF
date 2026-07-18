@@ -33,30 +33,40 @@ public static class DjvuDecoder
     /// <summary>Assumed scan resolution when a page doesn't declare one.</summary>
     private const int DefaultDpi = 300;
 
+    /// <summary>JPEG quality for photographic pages. High enough to be visually lossless on
+    /// scans, which matters because this is the second lossy step after DjVu's own wavelet.</summary>
+    private const int JpegQuality = 88;
+
     /// <summary>One image per page, in order.</summary>
     public static IReadOnlyList<DjvuPageImage> DecodeToPages(string path)
     {
+        // Read once, sequentially. Libraries often live on network/cloud mounts where the
+        // decoder's seek-heavy access pattern is painfully slow, and the parallel decode below
+        // needs a separate document per thread — re-reading the file per worker would multiply
+        // that cost.
+        byte[] file = File.ReadAllBytes(path);
+
         int pageCount;
-        using (var probe = new DjvuDocument(path))
+        using (var probe = Open(file, path))
         {
             pageCount = probe.Pages?.Count ?? 0;
             if (pageCount == 0) throw new InvalidDataException("The DjVu document has no pages.");
         }
 
         // Decoding is CPU-bound and pages are independent, but a DjvuDocument is not safe to
-        // share across threads — so each worker opens its own handle onto the same file.
+        // share across threads — so each worker gets its own, over the same bytes.
         var results = new DjvuPageImage[pageCount];
         int workers = Math.Max(1, Math.Min(Environment.ProcessorCount, 8));
         if (workers == 1 || pageCount == 1)
         {
-            using var doc = new DjvuDocument(path);
+            using var doc = Open(file, path);
             for (int i = 0; i < pageCount; i++) results[i] = RenderPage(doc.Pages[i]);
         }
         else
         {
             Parallel.For(0, workers, wk =>
             {
-                using var doc = new DjvuDocument(path);
+                using var doc = Open(file, path);
                 for (int i = wk; i < pageCount; i += workers)
                 {
                     try { results[i] = RenderPage(doc.Pages[i]); }
@@ -68,6 +78,14 @@ public static class DjvuDecoder
         var pages = results.Where(r => r.Png is not null).ToList();
         if (pages.Count == 0) throw new InvalidDataException("No DjVu pages could be decoded.");
         return pages;
+    }
+
+    /// <summary>A document over an in-memory copy of the file (read-only, no array copy).</summary>
+    private static DjvuDocument Open(byte[] file, string path)
+    {
+        var doc = new DjvuDocument();
+        doc.Load(new MemoryStream(file, writable: false), path);
+        return doc;
     }
 
     private static DjvuPageImage RenderPage(IDjvuPage page)
@@ -91,7 +109,16 @@ public static class DjvuDecoder
             catch { continue; }
             if (pm?.Data is null || pm.Width <= 0 || pm.Height <= 0) continue;
             if (IsBlank(pm)) continue;
-            return new DjvuPageImage(EncodePng(pm), widthPt, heightPt);
+
+            // Photographic pages (those carrying an IW44 background) go to JPEG: the source
+            // wavelet is already lossy, so it costs nothing real and saves an order of
+            // magnitude over PNG. Bitonal text pages stay PNG, where JPEG would ring badly
+            // around the glyphs.
+            var rgb = ToRgb(pm);
+            byte[] image = page.BackgroundIWPixelMap is not null
+                ? JpegEncoder.Encode(rgb, pm.Width, pm.Height, JpegQuality)
+                : EncodePng(rgb, pm.Width, pm.Height);
+            return new DjvuPageImage(image, widthPt, heightPt);
         }
         return default;
     }
@@ -155,31 +182,42 @@ public static class DjvuDecoder
     }
 
     /// <summary>
-    /// Encodes a DjvuNet pixel map to a PNG. The map is stored bottom-to-top with BGR samples,
-    /// one row every <c>Width * BytesPerPixel</c> bytes (its <c>GetRowSize</c> is in pixels,
-    /// not bytes), so rows are read in reverse and samples swapped to RGB.
+    /// Flattens a DjvuNet pixel map to tightly packed, top-down RGB. The map is stored
+    /// bottom-to-top with BGR samples, one row every <c>Width * BytesPerPixel</c> bytes (its
+    /// <c>GetRowSize</c> is in pixels, not bytes), so rows are read in reverse and samples
+    /// swapped.
     /// </summary>
-    private static byte[] EncodePng(IPixelMap pm)
+    private static byte[] ToRgb(IPixelMap pm)
     {
         int w = pm.Width, h = pm.Height, bpp = pm.BytesPerPixel;
         int stride = w * bpp;                    // bytes per row
         var data = pm.Data;
 
-        // PNG wants each scanline prefixed with a filter byte (0 = none), pixels as RGB.
-        var raw = new byte[h * (1 + w * 3)];
+        var rgb = new byte[w * h * 3];
         int o = 0;
         for (int y = 0; y < h; y++)
         {
             int srcRow = (h - 1 - y) * stride;    // bottom-up -> top-down
-            raw[o++] = 0;                         // filter: none
             for (int x = 0; x < w; x++)
             {
                 int p = srcRow + x * bpp;
                 byte b = (byte)data[p];
                 byte g = bpp >= 2 ? (byte)data[p + 1] : b;
                 byte r = bpp >= 3 ? (byte)data[p + 2] : b;
-                raw[o++] = r; raw[o++] = g; raw[o++] = b;
+                rgb[o++] = r; rgb[o++] = g; rgb[o++] = b;
             }
+        }
+        return rgb;
+    }
+
+    private static byte[] EncodePng(byte[] rgb, int w, int h)
+    {
+        // PNG wants each scanline prefixed with a filter byte (0 = none).
+        var raw = new byte[h * (1 + w * 3)];
+        for (int y = 0; y < h; y++)
+        {
+            raw[y * (1 + w * 3)] = 0;             // filter: none
+            Buffer.BlockCopy(rgb, y * w * 3, raw, y * (1 + w * 3) + 1, w * 3);
         }
 
         using var ms = new MemoryStream();

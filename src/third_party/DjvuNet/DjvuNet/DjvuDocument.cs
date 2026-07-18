@@ -450,6 +450,24 @@ namespace DjvuNet
         }
 
         /// <summary>
+        /// LOCAL MODIFICATION (noPDF): load from an already-read buffer instead of a path.
+        /// Decoding pages in parallel needs one document per thread, and re-opening the file
+        /// per thread is punishing on network-mounted libraries (random access over a cloud
+        /// drive). Callers read the bytes once and hand each worker its own stream over the
+        /// same memory. Safe because DjVu resolves its includes inside the file — Location is
+        /// informational only and is never used to find related files.
+        /// </summary>
+        public void Load(Stream stream, string location = null, int identifier = 0)
+        {
+            Identifier = identifier;
+            _Reader = new DjvuReader(stream);
+            _name = location != null ? Path.GetFileNameWithoutExtension(location) : string.Empty;
+            _location = location ?? string.Empty;
+
+            DecodeDjvuDocument(_Reader);
+        }
+
+        /// <summary>
         /// Function verifies DjVu file header and expects minimum length of 16 bytes.
         /// In sixteen bytes first eight form AT&TFORM ASCII text, 4 following ones
         /// contain length of DjVu file data (counted from first byte after file length field

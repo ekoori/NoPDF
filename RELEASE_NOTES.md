@@ -12,6 +12,16 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
   `.djvu`/`.djv` files work out of the box on every platform — no more "install DjVuLibre".
   If it ever meets a DjVu variant it can't handle, it still falls back to a bundled or
   installed `ddjvu`.
+- **DjVu renders correctly on photographic scans.** Illuminated books and scanned plates came
+  out as colour negatives, most pages came out blank, and double-page spreads came out
+  narrower than single leaves. Colours are no longer wrongly inverted; render resolution is
+  chosen from the factors the decoder can actually deliver (the wrong one silently produced a
+  blank page); and page size now follows the DjVu's own dimensions and DPI rather than
+  whatever resolution a page happened to be rendered at.
+- **DjVu opens several times faster, in a fraction of the memory.** Pages decode in parallel,
+  the file is read once instead of per worker (which matters on network/cloud-mounted
+  libraries), and photographic pages are stored as JPEG rather than PNG. A 37-page illuminated
+  book went from ~9s and a 52 MB document to ~4.5s and 6 MB. Bitonal text pages stay PNG.
 - **Smoother zooming.** Zoom (wheel or command) now resizes the pages and re-anchors the
   scroll in a single layout pass, instead of resizing and then jumping a frame later — no
   more jitter. Command zoom (`:zoom`, `zi`/`zo`) keeps the viewport centre put.
