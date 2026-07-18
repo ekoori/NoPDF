@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Vendored DjVu decoder from https://github.com/DjvuNet/DjvuNet (MIT, see LICENSE.md).
+    Only the pure-managed core decoder + its System.Attributes dependency are included, with
+    a clean project file in place of the upstream custom build system. noPDF uses the raw
+    pixel path (DjvuPage.GetPixelMap), never the System.Drawing image API, so it works on
+    every platform. See NoPdf.Core/Import/DjvuDecoder.cs.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>DjvuNet</AssemblyName>
+    <RootNamespace>DjvuNet</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <DefineConstants>$(DefineConstants);NETCOREAPP</DefineConstants>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <!-- Third-party code: don't fail our build on its warnings. -->
+    <NoWarn>$(NoWarn);CS0168;CS0219;CS0414;CS0649;CS0659;CS1591;CS8321;SYSLIB0011</NoWarn>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="DjvuNet\**\*.cs" />
+    <Compile Include="System.Attributes\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Only used by the library's System.Drawing image API, which noPDF never calls; it
+         compiles everywhere and simply isn't invoked off Windows. -->
+    <PackageReference Include="System.Drawing.Common" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>

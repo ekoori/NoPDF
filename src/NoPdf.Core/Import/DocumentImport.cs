@@ -79,10 +79,32 @@ public static class DocumentImport
 
     private static byte[] DjvuToPdf(string path)
     {
+        // The vendored pure-managed decoder handles DjVu with no external tool. If it can't
+        // (an unusual DjVu variant), fall back to a bundled/installed ddjvu.
+        try { return ImagesToPdf(DjvuDecoder.DecodeToPngPages(path)); }
+        catch (Exception ex) when (ex is not FileNotFoundException)
+        {
+            try { return DdjvuToPdf(path); }
+            catch (NotSupportedException)
+            {
+                throw new InvalidDataException(
+                    "Could not decode this DjVu file. " + ex.Message);
+            }
+        }
+    }
+
+    private static byte[] DdjvuToPdf(string path)
+    {
+        string exe = FindDdjvu()
+            ?? throw new NotSupportedException(
+                "DjVu needs DjVuLibre's 'ddjvu' tool. Put the 'ddjvu' executable next to noPDF " +
+                "(or in a 'tools' folder beside it), or install DjVuLibre and add it to PATH. " +
+                "On Windows: winget install DjVuLibre.DjVuLibre");
+
         string outPdf = Path.Combine(Path.GetTempPath(), "nopdf_" + Guid.NewGuid().ToString("N") + ".pdf");
         try
         {
-            var psi = new System.Diagnostics.ProcessStartInfo("ddjvu")
+            var psi = new System.Diagnostics.ProcessStartInfo(exe)
             { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
             psi.ArgumentList.Add("-format=pdf");
             psi.ArgumentList.Add("-quality=85");
@@ -90,16 +112,71 @@ public static class DocumentImport
             psi.ArgumentList.Add(outPdf);
             using var p = System.Diagnostics.Process.Start(psi)
                 ?? throw new NotSupportedException("Could not start ddjvu.");
+            string err = p.StandardError.ReadToEnd();
             p.WaitForExit(120_000);
             if (p.ExitCode != 0 || !File.Exists(outPdf))
-                throw new InvalidDataException("ddjvu failed to convert the DjVu file.");
+                throw new InvalidDataException(
+                    "ddjvu failed to convert the DjVu file." + (err.Length > 0 ? " " + err.Trim() : ""));
             return File.ReadAllBytes(outPdf);
         }
-        catch (System.ComponentModel.Win32Exception)
+        catch (System.ComponentModel.Win32Exception ex)
         {
-            throw new NotSupportedException("DjVu support needs DjVuLibre (the 'ddjvu' tool) installed and on PATH.");
+            throw new NotSupportedException("Could not run ddjvu: " + ex.Message);
         }
         finally { try { if (File.Exists(outPdf)) File.Delete(outPdf); } catch { } }
+    }
+
+    /// <summary>
+    /// Locates the <c>ddjvu</c> executable: bundled next to noPDF (or in a <c>tools</c> /
+    /// <c>tools/djvulibre</c> folder beside it) first — so a shipped copy makes DjVu work
+    /// with no setup — then the PATH, then the usual install locations. Returns null when
+    /// it can't be found.
+    /// </summary>
+    private static string? FindDdjvu()
+    {
+        string exeName = OperatingSystem.IsWindows() ? "ddjvu.exe" : "ddjvu";
+        string appDir = AppContext.BaseDirectory;
+
+        var candidates = new List<string>
+        {
+            Path.Combine(appDir, exeName),
+            Path.Combine(appDir, "tools", exeName),
+            Path.Combine(appDir, "tools", "djvulibre", exeName),
+        };
+        if (OperatingSystem.IsWindows())
+        {
+            foreach (var pf in new[]
+            {
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            })
+                if (!string.IsNullOrEmpty(pf))
+                    candidates.Add(Path.Combine(pf, "DjVuLibre", exeName));
+        }
+        else
+        {
+            candidates.Add("/usr/bin/ddjvu");
+            candidates.Add("/usr/local/bin/ddjvu");
+            candidates.Add("/opt/homebrew/bin/ddjvu");
+        }
+        foreach (var c in candidates)
+            if (File.Exists(c)) return c;
+
+        // Fall back to PATH (ProcessStartInfo resolves a bare name against it).
+        return OnPath(exeName) ? exeName : null;
+    }
+
+    private static bool OnPath(string exeName)
+    {
+        var pathVar = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrEmpty(pathVar)) return false;
+        char sep = OperatingSystem.IsWindows() ? ';' : ':';
+        foreach (var dir in pathVar.Split(sep, StringSplitOptions.RemoveEmptyEntries))
+        {
+            try { if (File.Exists(Path.Combine(dir.Trim(), exeName))) return true; }
+            catch { }
+        }
+        return false;
     }
 
     /// <summary>Orders names so page2 &lt; page10 (numeric runs compared as numbers).</summary>

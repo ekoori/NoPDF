@@ -7,7 +7,14 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
 ## Unreleased (0.0.4 line)
 
-_Nothing yet._
+- **DjVu opens with no external tool.** A pure-managed DjVu decoder (the vendored, MIT-licensed
+  [DjvuNet](https://github.com/DjvuNet/DjvuNet), `src/third_party/DjvuNet`) is built in, so
+  `.djvu`/`.djv` files work out of the box on every platform — no more "install DjVuLibre".
+  If it ever meets a DjVu variant it can't handle, it still falls back to a bundled or
+  installed `ddjvu`.
+- **Smoother zooming.** Zoom (wheel or command) now resizes the pages and re-anchors the
+  scroll in a single layout pass, instead of resizing and then jumping a frame later — no
+  more jitter. Command zoom (`:zoom`, `zi`/`zo`) keeps the viewport centre put.
 
 ## v0.0.4-beta.00 - 2026-07-18
 

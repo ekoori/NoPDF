@@ -18,4 +18,9 @@
     <PackageReference Include="SharpCompress" Version="0.50.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Vendored pure-managed DjVu decoder (MIT). See src/third_party/DjvuNet. -->
+    <ProjectReference Include="..\third_party\DjvuNet\DjvuNet.csproj" />
+  </ItemGroup>
+
 </Project>
