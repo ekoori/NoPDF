@@ -156,6 +156,7 @@ public partial class DocumentView : UserControl
             _vm.ScrollByRequested -= OnScrollBy;
             _vm.ScrollPageRequested -= OnScrollPage;
             _vm.ViewModeChanged -= OnViewModeChanged;
+            _vm.AnchoredZoom = null;
         }
         _vm = DataContext as DocumentViewModel;
         if (_vm is not null)
@@ -171,6 +172,7 @@ public partial class DocumentView : UserControl
             _vm.ScrollByRequested += OnScrollBy;
             _vm.ScrollPageRequested += OnScrollPage;
             _vm.ViewModeChanged += OnViewModeChanged;
+            _vm.AnchoredZoom = apply => ApplyZoomAnchored(apply, null);
             ApplyDpi();
             // The view is recycled when the tab changes, so a document swapped in here has
             // to re-apply its own mode and position — OnAttachedToVisualTree won't fire again.
@@ -533,27 +535,37 @@ public partial class DocumentView : UserControl
         var sv = Scroll;
         if (sv is null) return;
 
-        // Anchor the document point under the cursor so the same spot on the same
-        // page stays put across the zoom (extent scales, so anchor by extent ratio).
-        var mouse = e.GetPosition(sv);
-        double exW = sv.Extent.Width, exH = sv.Extent.Height;
-        double ratioX = exW > 0 ? (sv.Offset.X + mouse.X) / exW : 0;
-        double ratioY = exH > 0 ? (sv.Offset.Y + mouse.Y) / exH : 0;
-
         double factor = e.Delta.Y > 0 ? 1.1 : 1 / 1.1;
-        _vm.SetZoom(_vm.ZoomPercent / 100.0 * factor);
-
-        Dispatcher.UIThread.Post(() =>
-        {
-            var s = Scroll;
-            if (s is null) return;
-            double nW = s.Extent.Width, nH = s.Extent.Height;
-            double maxX = Math.Max(0, nW - s.Viewport.Width);
-            double maxY = Math.Max(0, nH - s.Viewport.Height);
-            s.Offset = new Vector(
-                Math.Clamp(ratioX * nW - mouse.X, 0, maxX),
-                Math.Clamp(ratioY * nH - mouse.Y, 0, maxY));
-        }, DispatcherPriority.Background);
+        double target = _vm.ZoomPercent / 100.0 * factor;
+        // Anchor to the point under the cursor so the same spot stays put.
+        ApplyZoomAnchored(() => _vm.SetZoom(target), e.GetPosition(sv));
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// Applies a zoom, then re-anchors the scroll offset in the SAME layout pass so the
+    /// pages don't resize and then visibly jump a frame later (the jitter). The anchor is a
+    /// point in viewport space — the cursor for a wheel zoom, the viewport centre otherwise
+    /// — that is kept over the same document position across the zoom.
+    /// </summary>
+    private void ApplyZoomAnchored(Action applyZoom, Point? anchor)
+    {
+        var sv = Scroll;
+        if (sv is null) { applyZoom(); return; }
+        var vp = sv.Viewport;
+        var a = anchor ?? new Point(vp.Width / 2, vp.Height / 2);
+
+        double exW = sv.Extent.Width, exH = sv.Extent.Height;
+        double rx = exW > 0 ? (sv.Offset.X + a.X) / exW : 0;
+        double ry = exH > 0 ? (sv.Offset.Y + a.Y) / exH : 0;
+
+        applyZoom();
+        UpdateWrapPanel();     // size the wrap panels for the new zoom first
+        sv.UpdateLayout();     // force the resize now, so the new extent is available
+
+        double nW = sv.Extent.Width, nH = sv.Extent.Height;
+        sv.Offset = new Vector(
+            Math.Clamp(rx * nW - a.X, 0, Math.Max(0, nW - vp.Width)),
+            Math.Clamp(ry * nH - a.Y, 0, Math.Max(0, nH - vp.Height)));
     }
 }

@@ -406,15 +406,19 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
     public void ClearManualZoom() => ManualZoom = false;
 
+    /// <summary>Set by the view: applies a zoom action anchored to the viewport centre, in a
+    /// single synchronous layout pass so the content doesn't resize and then visibly jump.</summary>
+    public Action<Action>? AnchoredZoom { get; set; }
+
     /// <summary>Applies a zoom requested from a command. Marks it user-driven (so it isn't
-    /// re-fitted away) and, since a command has no cursor to anchor to like the wheel does,
-    /// keeps the current page in view.</summary>
+    /// re-fitted away) and keeps the view anchored across the resize.</summary>
     public void ZoomCommand(Action apply)
     {
         ManualZoom = true;
-        apply();
-        if (ViewMode != PageViewMode.Full)
-            ScrollToPageRequested?.Invoke(Math.Clamp(CurrentPage - 1, 0, Math.Max(0, PageCount - 1)));
+        // The view resizes the pages and re-anchors in one pass; without a view (tests) just
+        // apply the zoom.
+        if (AnchoredZoom is { } anchored) anchored(apply);
+        else apply();
     }
 
     /// <summary>Zooms so the pages exactly fill their slots for the current view mode,
