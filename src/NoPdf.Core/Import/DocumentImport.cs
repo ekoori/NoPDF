@@ -58,16 +58,27 @@ public static class DocumentImport
     }
 
     public static byte[] ImagesToPdf(IEnumerable<byte[]> images)
+        // One point per pixel: with no better information the image's own resolution sets the
+        // page size.
+        => ImagesToPdf(images.Select(b => (b, 0.0, 0.0)));
+
+    /// <summary>
+    /// Builds a PDF from page images. Each entry may carry an explicit page size in points;
+    /// pass 0 to size the page from the image's pixels instead. An explicit size matters when
+    /// the render resolution varies from page to page (DjVu), since sizing by pixels would
+    /// then shrink a high-resolution spread below a low-resolution single leaf.
+    /// </summary>
+    public static byte[] ImagesToPdf(IEnumerable<(byte[] data, double widthPt, double heightPt)> images)
     {
         var doc = new PdfDocument();
-        foreach (var bytes in images)
+        foreach (var (bytes, widthPt, heightPt) in images)
         {
             XImage xi;
             try { xi = XImage.FromStream(new MemoryStream(bytes)); } // stream kept alive by the XImage
             catch { continue; } // skip anything PdfSharp can't decode (e.g. webp)
             var page = doc.AddPage();
-            page.Width = XUnit.FromPoint(xi.PixelWidth);
-            page.Height = XUnit.FromPoint(xi.PixelHeight);
+            page.Width = XUnit.FromPoint(widthPt > 0 ? widthPt : xi.PixelWidth);
+            page.Height = XUnit.FromPoint(heightPt > 0 ? heightPt : xi.PixelHeight);
             using var gfx = XGraphics.FromPdfPage(page);
             gfx.DrawImage(xi, 0, 0, page.Width.Point, page.Height.Point);
         }
@@ -81,7 +92,11 @@ public static class DocumentImport
     {
         // The vendored pure-managed decoder handles DjVu with no external tool. If it can't
         // (an unusual DjVu variant), fall back to a bundled/installed ddjvu.
-        try { return ImagesToPdf(DjvuDecoder.DecodeToPngPages(path)); }
+        try
+        {
+            return ImagesToPdf(DjvuDecoder.DecodeToPages(path)
+                .Select(p => (p.Png, p.WidthPt, p.HeightPt)));
+        }
         catch (Exception ex) when (ex is not FileNotFoundException)
         {
             try { return DdjvuToPdf(path); }

@@ -2,62 +2,162 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
+using System.Threading.Tasks;
 using DjvuNet;
 using DjvuNet.Graphics;
 
 namespace NoPdf.Core.Import;
 
 /// <summary>
-/// Decodes DjVu documents to PNG page images using the vendored, pure-managed DjvuNet
-/// decoder — no external <c>ddjvu</c> tool and no native libraries, so it works the same on
-/// every platform. Only the raw-pixel path is used (never DjvuNet's System.Drawing image
-/// API), and pixels are PNG-encoded here so the rest of the pipeline (ImagesToPdf) is
-/// unchanged.
+/// Decodes DjVu documents to page images using the vendored, pure-managed DjvuNet decoder —
+/// no external <c>ddjvu</c> tool and no native libraries, so it works the same on every
+/// platform. Only the raw-pixel path is used (never DjvuNet's System.Drawing image API), and
+/// pixels are PNG-encoded here so the rest of the pipeline is unchanged.
 /// </summary>
 public static class DjvuDecoder
 {
+    /// <summary>A rendered page: the image, plus the size its PDF page should be. The two are
+    /// deliberately independent — render resolution varies per page (see
+    /// <see cref="ChooseSubsample"/>), but page geometry must follow the DjVu's own
+    /// dimensions or a double-page spread ends up no wider than a single leaf.</summary>
+    public readonly record struct DjvuPageImage(byte[] Png, double WidthPt, double HeightPt);
+
     /// <summary>Cap on a rendered page's longest side, in pixels. A DjVu page at full
-    /// resolution is often 2000–4000px; ~2200 keeps it crisp without a giant PDF.</summary>
+    /// resolution is often 2000–9000px; ~2200 keeps it crisp without a giant PDF.</summary>
     private const int MaxSide = 2200;
 
-    /// <summary>One PNG per page, in order.</summary>
-    public static IReadOnlyList<byte[]> DecodeToPngPages(string path)
+    /// <summary>DjvuNet accepts subsample factors 1..12 (DjvuNet.Util.Verify).</summary>
+    private const int MaxSubsample = 12;
+
+    /// <summary>Assumed scan resolution when a page doesn't declare one.</summary>
+    private const int DefaultDpi = 300;
+
+    /// <summary>One image per page, in order.</summary>
+    public static IReadOnlyList<DjvuPageImage> DecodeToPages(string path)
     {
-        using var doc = new DjvuDocument(path);
-        var pages = doc.Pages;
-        if (pages is null || pages.Count == 0)
-            throw new InvalidDataException("The DjVu document has no pages.");
-
-        var result = new List<byte[]>(pages.Count);
-        foreach (var page in pages)
+        int pageCount;
+        using (var probe = new DjvuDocument(path))
         {
-            int w = page.Width, h = page.Height;
-            if (w <= 0 || h <= 0) continue;
+            pageCount = probe.Pages?.Count ?? 0;
+            if (pageCount == 0) throw new InvalidDataException("The DjVu document has no pages.");
+        }
 
-            // Render at a subsample chosen to keep the longest side under the cap. DjvuNet's
-            // subsample is an integer divisor (1 = full res); the target rectangle is given
-            // in the SUBSAMPLED coordinate space, so scale it down too.
-            int subsample = 1;
-            while (Math.Max(w, h) / subsample > MaxSide && subsample < 12) subsample++;
+        // Decoding is CPU-bound and pages are independent, but a DjvuDocument is not safe to
+        // share across threads — so each worker opens its own handle onto the same file.
+        var results = new DjvuPageImage[pageCount];
+        int workers = Math.Max(1, Math.Min(Environment.ProcessorCount, 8));
+        if (workers == 1 || pageCount == 1)
+        {
+            using var doc = new DjvuDocument(path);
+            for (int i = 0; i < pageCount; i++) results[i] = RenderPage(doc.Pages[i]);
+        }
+        else
+        {
+            Parallel.For(0, workers, wk =>
+            {
+                using var doc = new DjvuDocument(path);
+                for (int i = wk; i < pageCount; i += workers)
+                {
+                    try { results[i] = RenderPage(doc.Pages[i]); }
+                    catch { /* drop this page rather than failing the whole document */ }
+                }
+            });
+        }
+
+        var pages = results.Where(r => r.Png is not null).ToList();
+        if (pages.Count == 0) throw new InvalidDataException("No DjVu pages could be decoded.");
+        return pages;
+    }
+
+    private static DjvuPageImage RenderPage(IDjvuPage page)
+    {
+        int w = page.Width, h = page.Height;
+        if (w <= 0 || h <= 0) return default;
+
+        // Page geometry comes from the DjVu's own size and resolution, independent of how
+        // coarsely the pixels below happen to be rendered.
+        int dpi = page.Info?.DPI ?? 0;
+        if (dpi <= 0) dpi = DefaultDpi;
+        double widthPt = w * 72.0 / dpi, heightPt = h * 72.0 / dpi;
+
+        // Try the preferred subsample, then any other supported one, until pixels come back.
+        foreach (int subsample in ChooseSubsample(page))
+        {
             int sw = (w + subsample - 1) / subsample;
             int sh = (h + subsample - 1) / subsample;
-
-            var rect = new Rectangle(0, 0, sw, sh);
-            var pm = page.GetPixelMap(rect, subsample, 2.2, null);
+            IPixelMap pm;
+            try { pm = page.GetPixelMap(new Rectangle(0, 0, sw, sh), subsample, 2.2, null); }
+            catch { continue; }
             if (pm?.Data is null || pm.Width <= 0 || pm.Height <= 0) continue;
-
-            result.Add(EncodePng(pm));
+            if (IsBlank(pm)) continue;
+            return new DjvuPageImage(EncodePng(pm), widthPt, heightPt);
         }
-        if (result.Count == 0) throw new InvalidDataException("No DjVu pages could be decoded.");
-        return result;
+        return default;
     }
 
     /// <summary>
-    /// Encodes a DjvuNet pixel map to a PNG. The raw map (from <see cref="DjvuPage.GetPixelMap"/>)
-    /// is stored bottom-to-top with inverted intensity and BGR samples, one row every
-    /// <c>Width * BytesPerPixel</c> bytes (its <c>GetRowSize</c> is in pixels, not bytes). So
-    /// rows are read in reverse, samples swapped to RGB, and each value complemented — the
-    /// exact transform was found by matching DjvuNet's own reference render pixel-for-pixel.
+    /// Subsample factors to try, best first. This matters for correctness, not just size:
+    /// DjvuNet renders a page's background layer only when the requested subsample lines up
+    /// with the reduction the IW44 background is stored at (<c>red</c>, i.e. red, 4·red/3,
+    /// 2·red, 4·red or 8·red — see DjvuPage.GetBgPixmap). Any other factor falls into a
+    /// scaler branch that yields an all-zero (blank) map. The supported factors are also far
+    /// faster, since they map onto the wavelet's own reduction levels.
+    /// </summary>
+    private static IEnumerable<int> ChooseSubsample(IDjvuPage page)
+    {
+        int w = page.Width, h = page.Height;
+        int ideal = Math.Clamp((Math.Max(w, h) + MaxSide - 1) / MaxSide, 1, MaxSubsample);
+
+        var supported = SupportedSubsamples(page);
+        if (supported.Count == 0)
+        {
+            // No background layer (e.g. a purely bitonal page): any factor renders.
+            yield return ideal;
+            yield break;
+        }
+
+        // Smallest supported factor that keeps the page under the cap (the best quality that
+        // fits); failing that the coarsest available, then the rest as fallbacks.
+        var ordered = supported.Where(s => s >= ideal).OrderBy(s => s)
+            .Concat(supported.Where(s => s < ideal).OrderByDescending(s => s));
+        foreach (int s in ordered) yield return s;
+    }
+
+    private static IReadOnlyList<int> SupportedSubsamples(IDjvuPage page)
+    {
+        var bg = page.BackgroundIWPixelMap;
+        if (bg is null || bg.Width <= 0 || bg.Height <= 0) return Array.Empty<int>();
+
+        // The reduction the background is stored at, relative to the full page (this mirrors
+        // DjvuPage.ComputeRed, which is internal to the library).
+        int red = 0;
+        for (int r = 1; r < 16; r++)
+        {
+            if ((page.Width + r - 1) / r == bg.Width && (page.Height + r - 1) / r == bg.Height)
+            { red = r; break; }
+        }
+        if (red is 0 or > MaxSubsample) return Array.Empty<int>();
+
+        var set = new SortedSet<int>();
+        foreach (int s in new[] { red, 2 * red, 4 * red, 8 * red })
+            if (s <= MaxSubsample) set.Add(s);
+        if (red % 3 == 0 && red * 4 / 3 <= MaxSubsample) set.Add(red * 4 / 3); // the 4:3 path
+        return set.ToArray();
+    }
+
+    /// <summary>An all-zero map means the decode silently produced nothing.</summary>
+    private static bool IsBlank(IPixelMap pm)
+    {
+        var d = pm.Data;
+        for (int i = 0; i < d.Length; i += 7) if (d[i] != 0) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Encodes a DjvuNet pixel map to a PNG. The map is stored bottom-to-top with BGR samples,
+    /// one row every <c>Width * BytesPerPixel</c> bytes (its <c>GetRowSize</c> is in pixels,
+    /// not bytes), so rows are read in reverse and samples swapped to RGB.
     /// </summary>
     private static byte[] EncodePng(IPixelMap pm)
     {
@@ -75,9 +175,9 @@ public static class DjvuDecoder
             for (int x = 0; x < w; x++)
             {
                 int p = srcRow + x * bpp;
-                byte b = (byte)(255 - (byte)data[p]);
-                byte g = bpp >= 2 ? (byte)(255 - (byte)data[p + 1]) : b;
-                byte r = bpp >= 3 ? (byte)(255 - (byte)data[p + 2]) : b;
+                byte b = (byte)data[p];
+                byte g = bpp >= 2 ? (byte)data[p + 1] : b;
+                byte r = bpp >= 3 ? (byte)data[p + 2] : b;
                 raw[o++] = r; raw[o++] = g; raw[o++] = b;
             }
         }
