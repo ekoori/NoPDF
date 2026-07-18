@@ -18,6 +18,17 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
   chosen from the factors the decoder can actually deliver (the wrong one silently produced a
   blank page); and page size now follows the DjVu's own dimensions and DPI rather than
   whatever resolution a page happened to be rendered at.
+- **Plain scanned DjVu opens at all.** Bitonal documents — a JB2 mask with no colour layer,
+  which is most scanned text — failed outright with "could not decode". They now render from
+  the mask, box-filtered down so shrunken text stays antialiased and readable instead of
+  losing strokes.
+- **Converted documents are remembered.** The PDF that a DjVu or comic archive is converted
+  into is cached in the temp folder, so reopening a book is instant rather than a full
+  re-decode. An entry is keyed to the source's size and timestamp, so editing or replacing the
+  original re-converts rather than serving a stale copy; entries expire after 30 days and the
+  cache is capped at 2 GB.
+- **Conversion reports progress.** The status bar shows which page is being decoded instead of
+  the window appearing to hang for tens of seconds on a large book.
 - **DjVu opens several times faster, in a fraction of the memory.** Pages decode in parallel,
   the file is read once instead of per worker (which matters on network/cloud-mounted
   libraries), and photographic pages are stored as JPEG rather than PNG. A 37-page illuminated

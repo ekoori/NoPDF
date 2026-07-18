@@ -564,7 +564,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         try
         {
             bool recovered = doc.RecoverBytes is not null;
-            await doc.EnsureLoadedAsync();
+            await doc.EnsureLoadedAsync(OpenProgress());
             StatusText = recovered
                 ? $"Recovered unsaved changes to {doc.Title} — save to write them back"
                 : $"Opened {doc.Title} ({doc.Pages.Count} pages)";
@@ -638,6 +638,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             await OpenPathAsync(path);
     }
 
+    /// <summary>
+    /// Status-bar progress for an open in flight. Deliberately not routed through the tab's
+    /// StatusSink: a tab being opened isn't in the tab list yet, so it isn't "active" and its
+    /// sink would stay silent through the slowest part of the operation. Created on the UI
+    /// thread so reports from decode workers marshal back automatically.
+    /// </summary>
+    private IProgress<string> OpenProgress() => new Progress<string>(msg =>
+    {
+        if (!string.IsNullOrEmpty(msg)) StatusText = msg;
+    });
+
     /// <summary>Applies config/presets/sinks to a tab (before or after its content loads).</summary>
     private void ConfigureDoc(DocumentViewModel doc, string path)
     {
@@ -704,7 +715,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             var doc = DocumentViewModel.CreateDeferred(path);
             ConfigureDoc(doc, path);
-            await doc.EnsureLoadedAsync();
+            await doc.EnsureLoadedAsync(OpenProgress());
 
             int idx = Math.Max(0, Tabs.IndexOf(current));
             if (current.IsLoaded && current.IsDirty)
@@ -742,7 +753,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             var doc = DocumentViewModel.CreateDeferred(path);
             ConfigureDoc(doc, path);
-            await doc.EnsureLoadedAsync();
+            await doc.EnsureLoadedAsync(OpenProgress());
             Tabs.Add(doc);
             SelectedTab = doc;
             Recent.Add(path);

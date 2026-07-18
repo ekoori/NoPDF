@@ -166,14 +166,19 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public byte[]? RecoverBytes { get; set; }
 
     /// <summary>Reads the file (or the recovered bytes) and builds the pages. Idempotent.</summary>
-    public async Task EnsureLoadedAsync()
+    /// <param name="progress">Where to report conversion progress. Callers opening a tab that
+    /// isn't shown yet pass their own, since <see cref="StatusSink"/> only speaks for the
+    /// active tab. Must be created on the UI thread: the decoder reports from workers, and
+    /// Progress&lt;T&gt; is what marshals those back.</param>
+    public async Task EnsureLoadedAsync(IProgress<string>? progress = null)
     {
         if (IsLoaded) return;
         var recover = RecoverBytes;
         string path = FilePath;
+        progress ??= new Progress<string>(msg => StatusSink?.Invoke(msg));
         var (doc, cleaned, outline, models) = await Task.Run(() =>
         {
-            var fileBytes = recover ?? NoPdf.Core.Import.DocumentImport.ReadAsPdfBytes(path);
+            var fileBytes = recover ?? NoPdf.Core.Import.DocumentImport.ReadAsPdfBytes(path, progress);
             var (c, m) = AnnotationReader.LoadAndStrip(fileBytes);
             var d = PdfDocument.OpenBytes(c, path);
             return (d, c, d.GetOutline(), m);

@@ -38,7 +38,10 @@ public static class DjvuDecoder
     private const int JpegQuality = 88;
 
     /// <summary>One image per page, in order.</summary>
-    public static IReadOnlyList<DjvuPageImage> DecodeToPages(string path)
+    /// <param name="onProgress">Called as pages finish, with (completed, total). Invoked from
+    /// worker threads, so it must be safe to call concurrently.</param>
+    public static IReadOnlyList<DjvuPageImage> DecodeToPages(string path,
+        Action<int, int>? onProgress = null)
     {
         // Read once, sequentially. Libraries often live on network/cloud mounts where the
         // decoder's seek-heavy access pattern is painfully slow, and the parallel decode below
@@ -56,11 +59,24 @@ public static class DjvuDecoder
         // Decoding is CPU-bound and pages are independent, but a DjvuDocument is not safe to
         // share across threads — so each worker gets its own, over the same bytes.
         var results = new DjvuPageImage[pageCount];
+        int done = 0;
+        onProgress?.Invoke(0, pageCount);
+
+        void Completed()
+        {
+            int n = Interlocked.Increment(ref done);
+            // Pages finish out of order across workers, and a big book would otherwise post
+            // hundreds of updates; report at most once per percent (and always the last one).
+            if (onProgress is null) return;
+            if (n == pageCount || pageCount <= 100 || n * 100 / pageCount != (n - 1) * 100 / pageCount)
+                onProgress(n, pageCount);
+        }
+
         int workers = Math.Max(1, Math.Min(Environment.ProcessorCount, 8));
         if (workers == 1 || pageCount == 1)
         {
             using var doc = Open(file, path);
-            for (int i = 0; i < pageCount; i++) results[i] = RenderPage(doc.Pages[i]);
+            for (int i = 0; i < pageCount; i++) { results[i] = RenderPage(doc.Pages[i]); Completed(); }
         }
         else
         {
@@ -71,6 +87,7 @@ public static class DjvuDecoder
                 {
                     try { results[i] = RenderPage(doc.Pages[i]); }
                     catch { /* drop this page rather than failing the whole document */ }
+                    Completed();
                 }
             });
         }
@@ -99,6 +116,13 @@ public static class DjvuDecoder
         if (dpi <= 0) dpi = DefaultDpi;
         double widthPt = w * 72.0 / dpi, heightPt = h * 72.0 / dpi;
 
+        // Purely bitonal pages — a JB2 mask with no colour layers, which is most scanned text.
+        // GetPixelMap returns null for these (it has nothing to stencil onto), so they take a
+        // separate path entirely.
+        if (page.BackgroundIWPixelMap is null && page.ForegroundIWPixelMap is null
+            && page.ForegroundJB2Image is not null)
+            return RenderBitonal(page, widthPt, heightPt);
+
         // Try the preferred subsample, then any other supported one, until pixels come back.
         foreach (int subsample in ChooseSubsample(page))
         {
@@ -121,6 +145,57 @@ public static class DjvuDecoder
             return new DjvuPageImage(image, widthPt, heightPt);
         }
         return default;
+    }
+
+    /// <summary>
+    /// Renders a bitonal page from its JB2 mask. DjvuNet only decodes the mask correctly at
+    /// full resolution — asking for a subsampled bitmap returns an empty one — so the mask is
+    /// decoded at 1:1 and box-filtered down here. That is also better than a nearest-neighbour
+    /// reduction would be: averaging the ink coverage antialiases the glyphs into grey rather
+    /// than dropping strokes, which is what makes shrunken scanned text readable.
+    /// </summary>
+    private static DjvuPageImage RenderBitonal(IDjvuPage page, double widthPt, double heightPt)
+    {
+        int w = page.Width, h = page.Height;
+        IBitmap bm;
+        try { bm = page.GetBitmap(new Rectangle(0, 0, w, h), 1, 1, null); }
+        catch { return default; }
+        if (bm?.Data is null || bm.Width <= 0 || bm.Height <= 0) return default;
+
+        int srcW = bm.Width, srcH = bm.Height;
+        int factor = Math.Clamp((Math.Max(srcW, srcH) + MaxSide - 1) / MaxSide, 1, 16);
+        int outW = Math.Max(1, srcW / factor), outH = Math.Max(1, srcH / factor);
+        int levels = Math.Max(1, bm.Grays - 1);   // mask values run 0 (paper) .. Grays-1 (ink)
+        var data = bm.Data;
+
+        var rgb = new byte[outW * outH * 3];
+        int o = 0;
+        for (int y = 0; y < outH; y++)
+        {
+            for (int x = 0; x < outW; x++)
+            {
+                int sum = 0, n = 0;
+                for (int dy = 0; dy < factor; dy++)
+                {
+                    int sy = y * factor + dy;
+                    if (sy >= srcH) break;
+                    int row = (srcH - 1 - sy) * srcW;      // bottom-up -> top-down
+                    for (int dx = 0; dx < factor; dx++)
+                    {
+                        int sx = x * factor + dx;
+                        if (sx >= srcW) break;
+                        sum += (byte)data[row + sx];
+                        n++;
+                    }
+                }
+                byte v = (byte)(255 - (n == 0 ? 0 : sum * 255 / (n * levels)));
+                rgb[o++] = v; rgb[o++] = v; rgb[o++] = v;
+            }
+        }
+
+        // Always PNG: this is text, and grey-on-white antialiased glyphs both compress well
+        // losslessly and would ring under JPEG.
+        return new DjvuPageImage(EncodePng(rgb, outW, outH), widthPt, heightPt);
     }
 
     /// <summary>

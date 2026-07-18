@@ -28,12 +28,22 @@ public static class DocumentImport
            || IsSupportedNonPdf(path);
 
     /// <summary>PDF bytes for the file: comics/DjVu are converted; anything else is read as-is.</summary>
-    public static byte[] ReadAsPdfBytes(string path)
+    /// <param name="progress">Receives human-readable progress for the conversion, which can
+    /// take tens of seconds on a large scanned book.</param>
+    public static byte[] ReadAsPdfBytes(string path, IProgress<string>? progress = null)
     {
         var e = Path.GetExtension(path).ToLowerInvariant();
-        if (e is ".cbz" or ".cbr" or ".cb7" or ".cbt") return ComicToPdf(path);
-        if (e is ".djvu" or ".djv") return DjvuToPdf(path);
-        return File.ReadAllBytes(path);
+        bool convertible = e is ".cbz" or ".cbr" or ".cb7" or ".cbt" or ".djvu" or ".djv";
+        if (!convertible) return File.ReadAllBytes(path);
+
+        // Converting is the expensive part, so reuse an earlier conversion of the same file.
+        var cached = ImportCache.TryGet(path);
+        if (cached is not null) return cached;
+
+        var pdf = e is ".djvu" or ".djv" ? DjvuToPdf(path, progress) : ComicToPdf(path);
+        progress?.Report("");
+        ImportCache.Store(path, pdf);
+        return pdf;
     }
 
     private static byte[] ComicToPdf(string path)
@@ -88,14 +98,19 @@ public static class DocumentImport
         return outMs.ToArray();
     }
 
-    private static byte[] DjvuToPdf(string path)
+    private static byte[] DjvuToPdf(string path, IProgress<string>? progress = null)
     {
         // The vendored pure-managed decoder handles DjVu with no external tool. If it can't
         // (an unusual DjVu variant), fall back to a bundled/installed ddjvu.
         try
         {
-            return ImagesToPdf(DjvuDecoder.DecodeToPages(path)
-                .Select(p => (p.Png, p.WidthPt, p.HeightPt)));
+            string name = Path.GetFileName(path);
+            var pages = DjvuDecoder.DecodeToPages(path, (done, total) =>
+                progress?.Report(done == 0
+                    ? $"Decoding {name} — {total} pages…"
+                    : $"Decoding {name} — page {done} of {total}"));
+            progress?.Report($"Decoding {name} — building the document…");
+            return ImagesToPdf(pages.Select(p => (p.Png, p.WidthPt, p.HeightPt)));
         }
         catch (Exception ex) when (ex is not FileNotFoundException)
         {
