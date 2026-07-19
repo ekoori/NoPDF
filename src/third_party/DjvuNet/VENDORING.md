@@ -34,6 +34,31 @@ are handled on the caller's side, in `src/NoPdf.Core/Import/DjvuDecoder.cs` — 
 a subsample factor the decoder can actually render, and rendering bitonal pages from the JB2
 mask, both of which are worked around rather than patched here.
 
+## Verified status
+
+Checked file-by-file against upstream `c6f70f2` on 2026-07-19, comparing content with BOMs and
+line endings normalised (git and the copy disagree on both without a character of code
+differing, which would otherwise show as spurious drift):
+
+| | Count | |
+|---|---|---|
+| Upstream `.cs` under `DjvuNet/` + `System.Attributes/` | 185 | |
+| Vendored `.cs` | 183 | |
+| Byte-identical to upstream | 182 | |
+| Modified | 1 | `DjvuNet/DjvuDocument.cs` — the `Load(Stream)` overload above, an 18-line addition and nothing else |
+| Vendored-only (not in upstream) | 0 | |
+| Upstream, deliberately not copied | 2 | `DjvuNet/Properties/AssemblyInfo.Template.cs`, `System.Attributes/Properties/AssemblyInfo.Template.cs` |
+
+The two `AssemblyInfo.Template.cs` files are templates upstream's own build system expands;
+copying them in would duplicate assembly-level attributes and fail the build. They carry no
+code — leaving them out changes nothing about what the decoder does.
+
+So the modification table above is complete: there is no undocumented drift.
+
+To re-run this check, clone upstream at the recorded commit and compare each vendored `.cs`
+against `git show <rev>:<path>`, normalising CRLF/BOM before comparing. Do the comparison on
+content — a plain `diff -r` against a Windows checkout reports every file as different.
+
 ## Re-vendoring
 
 1. Clone upstream and check out the commit you want. On Windows, check out only the paths you
