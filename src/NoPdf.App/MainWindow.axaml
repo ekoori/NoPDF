@@ -305,28 +305,6 @@
             </Grid>
         </Border>
 
-        <!-- ===== Command bar (above status bar) ===== -->
-        <views:CommandBar DockPanel.Dock="Bottom" DataContext="{Binding CommandBar}"/>
-
-        <!-- ===== Which-key hint (above command bar) ===== -->
-        <Border DockPanel.Dock="Bottom" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource ChromeBorder}"
-                BorderThickness="0,1,0,0" Padding="10,5"
-                IsVisible="{Binding IsWhichKeyVisible}">
-            <ItemsControl ItemsSource="{Binding WhichKeyItems}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="sys:String">
-                        <Border Background="{DynamicResource WhichKeyChip}" CornerRadius="3" Padding="7,2" Margin="0,0,6,3">
-                            <TextBlock Text="{Binding}" Foreground="{DynamicResource ChromeForeground}"
-                                       FontFamily="Cascadia Code,Consolas,monospace" FontSize="12"/>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </Border>
-
         <!-- ===== Tabs panel: bottom (docked last so it sits above the status/command bars) ===== -->
         <!-- Doubles as a window drag region, since the top strip may be gone entirely. -->
         <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" Background="{DynamicResource ChromeBackground}"
@@ -346,7 +324,8 @@
             </StackPanel>
         </Grid>
 
-        <!-- ===== Main area ===== -->
+        <!-- ===== Main area, with the command bar floating over it ===== -->
+        <Grid>
         <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
 
             <!-- Left tabs panel -->
@@ -742,6 +721,31 @@
                     </ScrollViewer>
                 </DockPanel>
             </Border>
+        </Grid>
+
+            <!-- The command line and its which-key hint sit ON TOP of the viewport and the
+                 panels rather than docked below them: docking took height away from everything
+                 above, so simply opening the command line re-laid-out the document. -->
+            <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Stretch">
+                <Border Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource ChromeBorder}"
+                        BorderThickness="0,1,0,0" Padding="10,5"
+                        IsVisible="{Binding IsWhichKeyVisible}">
+                    <ItemsControl ItemsSource="{Binding WhichKeyItems}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="sys:String">
+                                <Border Background="{DynamicResource WhichKeyChip}" CornerRadius="3" Padding="7,2" Margin="0,0,6,3">
+                                    <TextBlock Text="{Binding}" Foreground="{DynamicResource ChromeForeground}"
+                                               FontFamily="Cascadia Code,Consolas,monospace" FontSize="12"/>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+                <views:CommandBar DataContext="{Binding CommandBar}"/>
+            </StackPanel>
         </Grid>
     </DockPanel>
 </Window>

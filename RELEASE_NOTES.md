@@ -50,6 +50,9 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
   focused, `:page 2` was undone as soon as it scrolled, and `:newpage` could only insert after
   an odd page. Scrolling now only moves the current page when it reaches a different row, and
   clicking a page makes it current.
+- **The command line opens over the document, not above it.** It and the which-key hint were
+  docked below the viewport, so opening the command line shrank the page area and the panels
+  and re-laid-out the document underneath you. They now float over the bottom of the view.
 - **The window can be dragged by its chrome.** With the title bar hidden, the status bar and
   the side panels now move the window too — anywhere that isn't a button, list, text box or
   scrollbar. Double-clicking those areas maximises and restores, as the tab strip already did.
