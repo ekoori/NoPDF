@@ -174,4 +174,14 @@ Build instructions, architecture, and the release process are in
 [CONTRIBUTE.md](CONTRIBUTE.md). Changes are logged in
 [RELEASE_NOTES.md](RELEASE_NOTES.md).
 
+## Licence
+
+noPDF is [MIT licensed](LICENSE) — © 2026 Igor Krbavcic.
+
+It's shipped as a self-contained binary, so several third-party components are compiled or
+bundled into it: PDFium (BSD-3-Clause, via the Apache-2.0 PDFiumCore bindings), PDFsharp,
+Avalonia, SharpCompress, YamlDotNet, a vendored copy of DjvuNet, and the Inter font (SIL Open
+Font License 1.1). Their notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md),
+which ships alongside every release binary.
+
 Built with Claude Code.

@@ -151,5 +151,11 @@ checking the actual output.
 - Match the surrounding style. Comments explain constraints the code can't show —
   the PDFium traps above are the sort of thing worth a comment; restating the next
   line is not.
+- noPDF is MIT (`LICENSE`). Anything bundled into the binary must be listed in
+  `THIRD-PARTY-NOTICES.md` with its notice — the release script copies that file next to the
+  binaries and fails if it's missing. Vendored code keeps its own licence file in place;
+  `src/third_party/DjvuNet/` also has a `VENDORING.md` recording the local changes and how to
+  re-vendor. If you change a vendored file, mark it `LOCAL MODIFICATION (noPDF)` and add a row
+  there.
 - Never commit `bin/`, `obj/`, or anything in `Release/`.
 - Keep `RELEASE_NOTES.md`'s *Unreleased* section current; `-Publish` promotes it.

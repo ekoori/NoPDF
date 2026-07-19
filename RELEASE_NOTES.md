@@ -7,6 +7,15 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
 ## Unreleased (0.0.4 line)
 
+- **noPDF is now MIT licensed** (`LICENSE`), and every bundled component's notice ships with
+  the binaries. `THIRD-PARTY-NOTICES.md` covers PDFium (BSD-3-Clause, via the Apache-2.0
+  PDFiumCore bindings and prebuilt native libraries), PDFsharp, Avalonia, SharpCompress,
+  YamlDotNet, CommunityToolkit.Mvvm, System.Drawing.Common, the vendored DjvuNet, and the Inter
+  font (SIL Open Font License 1.1); the release script copies it and `LICENSE` into `Release/`
+  and now fails rather than producing a release without them. The vendored DjvuNet's own MIT
+  notice — dropped in error when it was vendored — is restored, and `VENDORING.md` records what
+  was modified locally and how to re-vendor from upstream.
+
 - **New documents and blank pages.** `:newfile` opens an empty document in a new tab, at the
   size set by `default_page_size` in config.yaml (A4 unless you change it); it lives in memory
   until the first `:save`, which asks where to put it. `:newpage [size]` adds a blank page

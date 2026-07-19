@@ -129,6 +129,19 @@ if (Test-Path $cfgExe) {
     }
 }
 
+# The licence and the third-party notices ship WITH the binaries. This is not a nicety: the
+# single-file build compiles in MIT, Apache-2.0, BSD-3-Clause and OFL-1.1 components whose
+# licences all require their notices to accompany the software. A release missing these is
+# non-compliant, so a missing file fails the build rather than warning.
+foreach ($doc in @('LICENSE', 'THIRD-PARTY-NOTICES.md')) {
+    $srcDoc = Join-Path $root $doc
+    if (-not (Test-Path $srcDoc)) {
+        throw "$doc is missing from the repo root - released binaries must not ship without it."
+    }
+    Copy-Item $srcDoc (Join-Path $outDir $doc) -Force
+    Write-Host "  $doc -> $(Join-Path $outDir $doc)" -ForegroundColor Green
+}
+
 Write-Host "`nArtifacts written to $outDir" -ForegroundColor Cyan
 
 if (-not $Publish) {

@@ -9,4 +9,12 @@
     <VersionPrefix>0.0.4</VersionPrefix>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
+
+  <!-- Licensing. noPDF is MIT (see LICENSE). Bundled third-party components and their
+       notices are in THIRD-PARTY-NOTICES.md, which ships next to every released binary. -->
+  <PropertyGroup>
+    <Authors>Igor Krbavcic</Authors>
+    <Copyright>Copyright (c) 2026 Igor Krbavcic</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
 </Project>
