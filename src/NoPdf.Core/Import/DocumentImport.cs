@@ -30,17 +30,19 @@ public static class DocumentImport
     /// <summary>PDF bytes for the file: comics/DjVu are converted; anything else is read as-is.</summary>
     /// <param name="progress">Receives human-readable progress for the conversion, which can
     /// take tens of seconds on a large scanned book.</param>
-    public static byte[] ReadAsPdfBytes(string path, IProgress<string>? progress = null)
+    public static byte[] ReadAsPdfBytes(string path, IProgress<string>? progress = null,
+        ImportPreview? preview = null)
     {
         var e = Path.GetExtension(path).ToLowerInvariant();
         bool convertible = e is ".cbz" or ".cbr" or ".cb7" or ".cbt" or ".djvu" or ".djv";
         if (!convertible) return File.ReadAllBytes(path);
 
         // Converting is the expensive part, so reuse an earlier conversion of the same file.
+        // A cache hit needs no preview: the document is ready in one step.
         var cached = ImportCache.TryGet(path);
         if (cached is not null) return cached;
 
-        var pdf = e is ".djvu" or ".djv" ? DjvuToPdf(path, progress) : ComicToPdf(path);
+        var pdf = e is ".djvu" or ".djv" ? DjvuToPdf(path, progress, preview) : ComicToPdf(path);
         progress?.Report("");
         ImportCache.Store(path, pdf);
         return pdf;
@@ -78,11 +80,18 @@ public static class DocumentImport
     /// the render resolution varies from page to page (DjVu), since sizing by pixels would
     /// then shrink a high-resolution spread below a low-resolution single leaf.
     /// </summary>
-    public static byte[] ImagesToPdf(IEnumerable<(byte[] data, double widthPt, double heightPt)> images)
+    public static byte[] ImagesToPdf(IEnumerable<(byte[] data, double widthPt, double heightPt)> images,
+        Action<int, int>? onProgress = null)
     {
+        var list = images as IReadOnlyList<(byte[] data, double widthPt, double heightPt)> ?? images.ToList();
         var doc = new PdfDocument();
-        foreach (var (bytes, widthPt, heightPt) in images)
+        int done = 0;
+        foreach (var (bytes, widthPt, heightPt) in list)
         {
+            // Assembling is about as slow as decoding for a big scan, so it reports too —
+            // otherwise the status bar sits on the last decoded page for ten seconds.
+            if (++done % 4 == 1 || done == list.Count) onProgress?.Invoke(done, list.Count);
+
             XImage xi;
             try { xi = XImage.FromStream(new MemoryStream(bytes)); } // stream kept alive by the XImage
             catch { continue; } // skip anything PdfSharp can't decode (e.g. webp)
@@ -98,7 +107,8 @@ public static class DocumentImport
         return outMs.ToArray();
     }
 
-    private static byte[] DjvuToPdf(string path, IProgress<string>? progress = null)
+    private static byte[] DjvuToPdf(string path, IProgress<string>? progress = null,
+        ImportPreview? preview = null)
     {
         // The vendored pure-managed decoder handles DjVu with no external tool. If it can't
         // (an unusual DjVu variant), fall back to a bundled/installed ddjvu.
@@ -108,9 +118,9 @@ public static class DocumentImport
             var pages = DjvuDecoder.DecodeToPages(path, (done, total) =>
                 progress?.Report(done == 0
                     ? $"Decoding {name} — {total} pages…"
-                    : $"Decoding {name} — page {done} of {total}"));
-            progress?.Report($"Decoding {name} — building the document…");
-            return ImagesToPdf(pages.Select(p => (p.Png, p.WidthPt, p.HeightPt)));
+                    : $"Decoding {name} — page {done} of {total}"), preview);
+            return ImagesToPdf(pages.Select(p => (p.Png, p.WidthPt, p.HeightPt)),
+                (done, total) => progress?.Report($"Building {name} — page {done} of {total}"));
         }
         catch (Exception ex) when (ex is not FileNotFoundException)
         {

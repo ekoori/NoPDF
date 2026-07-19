@@ -38,8 +38,12 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
   re-decode. An entry is keyed to the source's size and timestamp, so editing or replacing the
   original re-converts rather than serving a stale copy; entries expire after 30 days and the
   cache is capped at 2 GB.
-- **Conversion reports progress.** The status bar shows which page is being decoded instead of
-  the window appearing to hang for tens of seconds on a large book.
+- **Conversion reports progress, and pages appear as they are converted.** The status bar shows
+  both phases — `Decoding … page N of M` and then `Building … page N of M`, which matters
+  because assembling the PDF is about half the wait. The document also lays itself out as soon
+  as the page geometry is known and fills each page in as it is decoded, so a long scan is
+  readable from the first page instead of showing nothing until the end. Nothing scrolls or
+  steals focus while this happens, and it costs no extra conversion time.
 - **DjVu opens several times faster, in a fraction of the memory.** Pages decode in parallel,
   the file is read once instead of per worker (which matters on network/cloud-mounted
   libraries), and photographic pages are stored as JPEG rather than PNG. A 37-page illuminated

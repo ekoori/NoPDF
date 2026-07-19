@@ -56,7 +56,7 @@ public static class PdfFlattener
         try
         {
             using var input = new MemoryStream(source);
-            using var doc = PdfReader.Open(input, PdfDocumentOpenMode.InformationOnly);
+            using var doc = PdfReader.Open(input, PdfDocumentOpenMode.Import);
             for (int i = 0; i < doc.PageCount; i++)
             {
                 var annots = doc.Pages[i].Elements.GetArray("/Annots");

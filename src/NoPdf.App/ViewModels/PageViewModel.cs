@@ -302,6 +302,26 @@ public sealed partial class PageViewModel : ViewModelBase
 
     // ----- Rendering -----
 
+    /// <summary>
+    /// Shows a decoded page image before the document itself exists, so a long conversion fills
+    /// in as it goes instead of showing nothing for half a minute. Deliberately leaves
+    /// <c>_renderedScale</c> at NaN: this is a stand-in, and the page still renders itself
+    /// properly from the document once there is one.
+    /// </summary>
+    public void SetPreview(byte[] imageBytes)
+    {
+        if (Bitmap is not null && !double.IsNaN(_renderedScale)) return; // already the real thing
+        try
+        {
+            using var ms = new System.IO.MemoryStream(imageBytes);
+            var bmp = new Bitmap(ms);
+            var old = Bitmap;
+            Bitmap = bmp;
+            old?.Dispose();
+        }
+        catch { /* a preview is a nicety; never fail a load over one */ }
+    }
+
     private void EnsureRendered()
     {
         double scale = _owner.Scale;

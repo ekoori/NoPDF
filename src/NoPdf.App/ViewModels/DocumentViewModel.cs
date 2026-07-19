@@ -185,6 +185,14 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     /// <summary>Unsaved bytes to restore instead of reading the file (crash recovery).</summary>
     public byte[]? RecoverBytes { get; set; }
 
+    /// <summary>
+    /// How work coming off converter worker threads gets onto the UI thread. A seam only so
+    /// the progressive-load path can be exercised without a dispatcher loop running to drain
+    /// posts — otherwise the callbacks would silently never fire and the tests would be
+    /// checking the fallback instead of the thing they claim to check.
+    /// </summary>
+    public static Action<Action> UiPost { get; set; } = action => Dispatcher.UIThread.Post(action);
+
     /// <summary>Reads the file (or the recovered bytes) and builds the pages. Idempotent.</summary>
     /// <param name="progress">Where to report conversion progress. Callers opening a tab that
     /// isn't shown yet pass their own, since <see cref="StatusSink"/> only speaks for the
@@ -196,9 +204,23 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         var recover = RecoverBytes;
         string path = FilePath;
         progress ??= new Progress<string>(msg => StatusSink?.Invoke(msg));
+
+        // Converting a scanned book takes tens of seconds. The converter hands over the page
+        // geometry first and then each page as it is decoded, so the document lays out
+        // immediately and fills in behind that, rather than showing nothing until the end.
+        // Callbacks arrive on worker threads, hence the marshalling.
+        var preview = new NoPdf.Core.Import.ImportPreview
+        {
+            Layout = sizes => UiPost(() => BuildPlaceholderPages(sizes)),
+            Page = (index, image) => UiPost(() =>
+            {
+                if (index >= 0 && index < Pages.Count) Pages[index].SetPreview(image);
+            }),
+        };
+
         var (doc, cleaned, outline, models) = await Task.Run(() =>
         {
-            var fileBytes = recover ?? NoPdf.Core.Import.DocumentImport.ReadAsPdfBytes(path, progress);
+            var fileBytes = recover ?? NoPdf.Core.Import.DocumentImport.ReadAsPdfBytes(path, progress, preview);
             var (c, m) = AnnotationReader.LoadAndStrip(fileBytes);
             var d = PdfDocument.OpenBytes(c, path);
             return (d, c, d.GetOutline(), m);
@@ -206,7 +228,10 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
 
         Document = doc;
         _workingBytes = cleaned;
-        BuildPages(models);
+        // The placeholders were built from the same geometry, so when they line up they are
+        // kept: rebuilding would throw away the previews and flash the whole view.
+        if (Pages.Count == doc.PageCount) AttachAnnotations(models);
+        else { Pages.Clear(); Thumbnails.Clear(); BuildPages(models); }
         foreach (var item in outline)
             Outline.Add(BookmarkNode.FromOutline(item));
 
@@ -214,6 +239,37 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(PageLabel));
         OnPropertyChanged(nameof(HasOutline));
         if (recover is not null) { RecoverBytes = null; IsDirty = true; } // recovered edits are unsaved
+    }
+
+    /// <summary>
+    /// Lays the document out before it exists, from geometry the converter read out of the
+    /// source's header. The pages are real page view models with the right sizes — they simply
+    /// have no document to render from yet, which <see cref="PageViewModel"/> already tolerates
+    /// (it leaves the placeholder). Previews fill them in as pages are decoded.
+    /// </summary>
+    private void BuildPlaceholderPages(IReadOnlyList<(double WidthPt, double HeightPt)> sizes)
+    {
+        if (Pages.Count > 0) return;                 // a reload; leave what is on screen alone
+        for (int i = 0; i < sizes.Count; i++)
+        {
+            var size = new PageInfo(sizes[i].WidthPt, sizes[i].HeightPt);
+            Pages.Add(new PageViewModel(this, i, size));
+            Thumbnails.Add(new PageThumbnail(this, i, size));
+        }
+        OnPropertyChanged(nameof(PageCount));
+        OnPropertyChanged(nameof(PageLabel));
+        RefreshVisiblePages();
+    }
+
+    /// <summary>Hands the annotations read from the file to pages that already exist.</summary>
+    private void AttachAnnotations(List<PdfAnnotationModel> annotations)
+    {
+        foreach (var group in annotations.GroupBy(a => a.PageIndex))
+        {
+            if (group.Key < 0 || group.Key >= Pages.Count) continue;
+            foreach (var a in group) Pages[group.Key].Annotations.Add(a);
+        }
+        RefreshVisiblePages();
     }
 
     private void BuildPages(List<PdfAnnotationModel> annotations)

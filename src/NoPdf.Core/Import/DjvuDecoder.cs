@@ -41,7 +41,7 @@ public static class DjvuDecoder
     /// <param name="onProgress">Called as pages finish, with (completed, total). Invoked from
     /// worker threads, so it must be safe to call concurrently.</param>
     public static IReadOnlyList<DjvuPageImage> DecodeToPages(string path,
-        Action<int, int>? onProgress = null)
+        Action<int, int>? onProgress = null, ImportPreview? preview = null)
     {
         // Read once, sequentially. Libraries often live on network/cloud mounts where the
         // decoder's seek-heavy access pattern is painfully slow, and the parallel decode below
@@ -54,6 +54,23 @@ public static class DjvuDecoder
         {
             pageCount = probe.Pages?.Count ?? 0;
             if (pageCount == 0) throw new InvalidDataException("The DjVu document has no pages.");
+
+            // Page geometry is in the header, so the whole document can be laid out before a
+            // single page is decoded — the viewer gets its page count and scrollbar straight
+            // away and fills the pages in behind that.
+            if (preview?.Layout is not null)
+            {
+                var probePages = probe.Pages!;
+                var layout = new (double, double)[pageCount];
+                for (int i = 0; i < pageCount; i++)
+                {
+                    var p = probePages[i];
+                    int dpi = p.Info?.DPI ?? 0;
+                    if (dpi <= 0) dpi = DefaultDpi;
+                    layout[i] = (p.Width * 72.0 / dpi, p.Height * 72.0 / dpi);
+                }
+                preview.Layout(layout);
+            }
         }
 
         // Decoding is CPU-bound and pages are independent, but a DjvuDocument is not safe to
@@ -72,11 +89,21 @@ public static class DjvuDecoder
                 onProgress(n, pageCount);
         }
 
+        void Publish(int index)
+        {
+            if (preview?.Page is not null && results[index].Png is { } png) preview.Page(index, png);
+        }
+
         int workers = Math.Max(1, Math.Min(Environment.ProcessorCount, 8));
         if (workers == 1 || pageCount == 1)
         {
             using var doc = Open(file, path);
-            for (int i = 0; i < pageCount; i++) { results[i] = RenderPage(doc.Pages[i]); Completed(); }
+            for (int i = 0; i < pageCount; i++)
+            {
+                results[i] = RenderPage(doc.Pages[i]);
+                Publish(i);
+                Completed();
+            }
         }
         else
         {
@@ -85,7 +112,7 @@ public static class DjvuDecoder
                 using var doc = Open(file, path);
                 for (int i = wk; i < pageCount; i += workers)
                 {
-                    try { results[i] = RenderPage(doc.Pages[i]); }
+                    try { results[i] = RenderPage(doc.Pages[i]); Publish(i); }
                     catch { /* drop this page rather than failing the whole document */ }
                     Completed();
                 }
