@@ -143,6 +143,11 @@ public partial class PageView : UserControl
         if (!props.IsLeftButtonPressed) return;
 
         Focus();
+        // Clicking a page makes it the current one. In a multi-page-across view the scroll
+        // position alone can't say which page of a row you mean, so this is how you pick the
+        // one that commands like :newpage act on.
+        _current.Owner.FocusPage(_current.PageNumber);
+
         var pos = AreaPos(e);
         var page = ToPage(pos);
         var tool = Tool;

@@ -43,7 +43,16 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
   because assembling the PDF is about half the wait. The document also lays itself out as soon
   as the page geometry is known and fills each page in as it is decoded, so a long scan is
   readable from the first page instead of showing nothing until the end. Nothing scrolls or
-  steals focus while this happens, and it costs no extra conversion time.
+  steals focus while this happens, and it costs no extra conversion time. The tab opens
+  straight away and fills in, rather than appearing only once the whole file is converted.
+- **Any page can be the current one in a multi-page-across view.** With `:view scroll 2` (or
+  `scrollh`), the current page was pinned to the first column: an even page could never be
+  focused, `:page 2` was undone as soon as it scrolled, and `:newpage` could only insert after
+  an odd page. Scrolling now only moves the current page when it reaches a different row, and
+  clicking a page makes it current.
+- **The window can be dragged by its chrome.** With the title bar hidden, the status bar and
+  the side panels now move the window too — anywhere that isn't a button, list, text box or
+  scrollbar. Double-clicking those areas maximises and restores, as the tab strip already did.
 - **DjVu opens several times faster, in a fraction of the memory.** Pages decode in parallel,
   the file is read once instead of per worker (which matters on network/cloud-mounted
   libraries), and photographic pages are stored as JPEG rather than PNG. A 37-page illuminated

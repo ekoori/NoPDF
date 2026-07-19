@@ -741,27 +741,37 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (current is null) { await OpenPathAsync(path); return; }
 
         StatusText = $"Opening {path}…";
+        int idx = Math.Max(0, Tabs.IndexOf(current));
+        var doc = DocumentViewModel.CreateDeferred(path);
+        ConfigureDoc(doc, path);
+
+        // Show the new tab straight away so its conversion is visible. The tab it replaces is
+        // only retired once the new one has actually loaded — if the file turns out to be
+        // unreadable, the tab that was open is still there.
+        Tabs.Insert(idx, doc);
+        SelectedTab = doc;
         try
         {
-            var doc = DocumentViewModel.CreateDeferred(path);
-            ConfigureDoc(doc, path);
             await doc.EnsureLoadedAsync(OpenProgress());
 
-            int idx = Math.Max(0, Tabs.IndexOf(current));
             if (current.IsLoaded && current.IsDirty)
                 try { _autosave.Save(current.FilePath, current.ExportWithAnnotations()); } catch { }
-            _closedTabs.Push((current.FilePath, idx)); // :reopen brings it back
+            _closedTabs.Push((current.FilePath, Math.Max(0, Tabs.IndexOf(current)))); // :reopen brings it back
 
-            Tabs.Insert(idx, doc);
             Tabs.Remove(current);
             current.Dispose();
-            SelectedTab = doc;
 
             Recent.Add(path);
             RefreshRecent();
             StatusText = $"Opened {doc.Title} ({doc.Pages.Count} pages)";
         }
-        catch (Exception ex) { StatusText = $"Failed to open: {ex.Message}"; }
+        catch (Exception ex)
+        {
+            Tabs.Remove(doc);
+            doc.Dispose();
+            SelectedTab = current;
+            StatusText = $"Failed to open: {ex.Message}";
+        }
     }
 
     public async Task OpenPathAsync(string path, bool forceNewTab = false)
@@ -779,19 +789,26 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
 
         StatusText = $"Opening {path}…";
+        var doc = DocumentViewModel.CreateDeferred(path);
+        ConfigureDoc(doc, path);
+
+        // Show the tab before reading the file. Converting a scanned book takes tens of
+        // seconds, and the point of the progressive load is to watch it fill in — which can't
+        // happen if the tab only appears once it has finished.
+        Tabs.Add(doc);
+        SelectedTab = doc;
         try
         {
-            var doc = DocumentViewModel.CreateDeferred(path);
-            ConfigureDoc(doc, path);
             await doc.EnsureLoadedAsync(OpenProgress());
-            Tabs.Add(doc);
-            SelectedTab = doc;
             Recent.Add(path);
             RefreshRecent();
             StatusText = $"Opened {doc.Title} ({doc.Pages.Count} pages)";
         }
         catch (Exception ex)
         {
+            // An empty tab that never loaded is worse than none, so take it back out.
+            Tabs.Remove(doc);
+            doc.Dispose();
             StatusText = $"Failed to open: {ex.Message}";
         }
     }

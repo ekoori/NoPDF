@@ -198,9 +198,19 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     /// isn't shown yet pass their own, since <see cref="StatusSink"/> only speaks for the
     /// active tab. Must be created on the UI thread: the decoder reports from workers, and
     /// Progress&lt;T&gt; is what marshals those back.</param>
-    public async Task EnsureLoadedAsync(IProgress<string>? progress = null)
+    public Task EnsureLoadedAsync(IProgress<string>? progress = null)
     {
-        if (IsLoaded) return;
+        if (IsLoaded) return Task.CompletedTask;
+        // The tab is shown before its content is ready, and selecting a tab also kicks off a
+        // load — so two callers can race here. They share one conversion; without this a big
+        // DjVu would be decoded twice, concurrently.
+        return _loading ??= LoadCoreAsync(progress);
+    }
+
+    private Task? _loading;
+
+    private async Task LoadCoreAsync(IProgress<string>? progress)
+    {
         var recover = RecoverBytes;
         string path = FilePath;
         progress ??= new Progress<string>(msg => StatusSink?.Invoke(msg));
@@ -565,10 +575,31 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     public bool FirstPage() => GoToPage(1);
     public bool LastPage() => GoToPage(PageCount);
 
+    /// <summary>
+    /// Makes a page current because the user picked it directly (clicked it, or navigated to
+    /// it). Unlike the scroll-driven update this always takes effect — it is the only way to
+    /// land on a page that shares a row with another in a multi-page-across view.
+    /// </summary>
+    public void FocusPage(int oneBased)
+    {
+        if (oneBased >= 1 && oneBased <= PageCount) CurrentPage = oneBased;
+    }
+
     /// <summary>Updates the current page from scroll position without re-scrolling.</summary>
     public void SetCurrentPageSilent(int oneBased)
     {
-        if (oneBased >= 1 && oneBased <= PageCount) CurrentPage = oneBased;
+        if (oneBased < 1 || oneBased > PageCount) return;
+
+        // With several pages across, every page in a row is equally "at the top", and the view
+        // reports the first of them. Left alone that pins the current page to the first column
+        // — an even page could never be current in a 2-up view, so `:page 2` was undone the
+        // moment it scrolled and `:newpage` could only ever insert after an odd page. Scrolling
+        // to a different row still moves the current page; scrolling within the row leaves
+        // whichever page was deliberately chosen alone.
+        int perRow = Math.Max(1, PagesPerRow);
+        if (perRow > 1 && (oneBased - 1) / perRow == (CurrentPage - 1) / perRow) return;
+
+        CurrentPage = oneBased;
     }
 
     // ----- Tools / selection -----

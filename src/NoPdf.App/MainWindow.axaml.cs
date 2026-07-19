@@ -99,18 +99,44 @@ public partial class MainWindow : Window
             : Avalonia.Controls.WindowDecorations.BorderOnly;
     }
 
-    private static bool OverButton(object? source)
-        => (source as Control)?.FindAncestorOfType<Button>(includeSelf: true) is not null;
+    /// <summary>
+    /// Whether a press landed on something that does its own thing with a click. The window is
+    /// draggable by its chrome — the title strip, the panels, the status bar — but only by the
+    /// empty parts of it: taking over a press meant for a list row, a text box or a scrollbar
+    /// would make those controls unusable.
+    /// </summary>
+    private static bool OverInteractive(object? source)
+    {
+        if (source is not Control c) return false;
+        foreach (var control in c.GetSelfAndVisualAncestors().OfType<Control>())
+        {
+            switch (control)
+            {
+                case Button:            // also covers ToggleButton / CheckBox
+                case ListBox:
+                case ListBoxItem:       // also covers TabStripItem
+                case TreeView:
+                case TreeViewItem:
+                case TextBox:
+                case ComboBox:
+                case Slider:
+                case Avalonia.Controls.Primitives.ScrollBar:
+                    return true;
+            }
+            if (control is Views.PageView or Views.DocumentView) return true;   // the document itself
+        }
+        return false;
+    }
 
     private void OnDragStripPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && !OverButton(e.Source))
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && !OverInteractive(e.Source))
             BeginMoveDrag(e);
     }
 
     private void OnDragStripDoubleTapped(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        if (OverButton(e.Source)) return;
+        if (OverInteractive(e.Source)) return;
         WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
     }
 
