@@ -5,7 +5,11 @@ local build number (raised on every build). Public releases are cut with
 `scripts/release.ps1 -Publish`, which bumps **X**, resets **YY** to `00`, and
 publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
-## Unreleased (0.0.4 line)
+## Unreleased (0.0.5 line)
+
+_Nothing yet._
+
+## v0.0.5-beta.00 - 2026-07-20
 
 - **noPDF is now MIT licensed** (`LICENSE`), and every bundled component's notice ships with
   the binaries. `THIRD-PARTY-NOTICES.md` covers PDFium (BSD-3-Clause, via the Apache-2.0
@@ -277,5 +281,6 @@ Signatures & fixes (earlier in the 0.0.2 line):
   Linux, and macOS (Intel + Apple Silicon). Keyboard-driven PDF viewer/editor:
   annotations, bookmarks, page ops, visible + cryptographic signatures,
   qutebrowser-style command line, theming, session persistence.
+
 
 
