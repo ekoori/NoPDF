@@ -281,15 +281,47 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (dest is null) { StatusText = "Signing cancelled"; return; } // leave un-certified so it can be retried
         try
         {
-            var bytes = doc.ExportWithAnnotations();
             var cert = NoPdf.Core.Signing.SignatureService.LoadCertificate(pfx, sig.CertPassword ?? "");
             string reason = sig.Contents ?? "";
-            await Task.Run(() => NoPdf.Core.Signing.SignatureService.Sign(bytes, dest, cert, reason, ""));
+
+            // The stamp becomes the signature's own appearance, so it is left out of the
+            // document body — otherwise it would be drawn twice, and the loose copy could be
+            // moved or deleted without disturbing the signature meant to vouch for it.
+            var bytes = doc.ExportWithoutAnnotation(sig);
+            var rect = sig.Rect;
+            var appearance = new NoPdf.Core.Signing.SignatureAppearance(
+                sig.PageIndex, rect.Left, rect.Bottom, rect.Right, rect.Top,
+                string.IsNullOrWhiteSpace(sig.SignerName) ? cert.GetNameInfo(
+                    System.Security.Cryptography.X509Certificates.X509NameType.SimpleName, false) : sig.SignerName,
+                reason, DateTime.Now);
+
+            // Appending keeps signatures already in the document verifiable; re-saving the whole
+            // file would rewrite the bytes they hashed and silently invalidate them.
+            string? incError = null;
+            bool signed = await Task.Run(() =>
+                NoPdf.Core.Signing.IncrementalSigner.TrySign(bytes, dest, cert, appearance, out incError));
+
+            if (!signed)
+            {
+                // Fall back, but say plainly what that costs — a full rewrite breaks any
+                // signature already on the document.
+                int existing = 0;
+                try { existing = NoPdf.Core.Signing.SignatureVerifier.Verify(bytes).Count; } catch { }
+                await Task.Run(() => NoPdf.Core.Signing.SignatureService.Sign(bytes, dest, cert, reason, ""));
+                StatusText = existing > 0
+                    ? $"Signed → {Path.GetFileName(dest)} — but {existing} earlier signature(s) could not be preserved ({incError})"
+                    : $"Signed → {Path.GetFileName(dest)} ({incError})";
+            }
+            else
+            {
+                StatusText = $"Signed & certified → {Path.GetFileName(dest)}";
+            }
+
             sig.Certified = true;                  // succeeded — don't fire again
+            doc.DiscardAnnotation(sig);            // it lives on as the signature's appearance
             // Switch this tab over to the freshly-signed file, so the user is now looking at
             // (and working on) what was actually written and signed.
             await OpenInCurrentTabAsync(dest);
-            StatusText = $"Signed & certified → {Path.GetFileName(dest)}";
         }
         catch (Exception ex) { StatusText = "Sign failed: " + ex.Message; }
     }

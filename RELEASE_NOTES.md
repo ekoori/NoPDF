@@ -7,7 +7,19 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
 ## Unreleased (0.0.5 line)
 
-_Nothing yet._
+- **Signing no longer destroys the signatures already on a document.** Signing used to re-save
+  the whole file, which rewrites the bytes an earlier signature was computed over — so the
+  moment a second person signed, everyone before them showed as *"INVALID — the document was
+  changed after it was signed"*. Signatures are now appended as a proper incremental revision:
+  the existing bytes are left exactly as they were, so earlier signatures keep verifying and a
+  document can genuinely be counter-signed. Earlier signers correctly report that a later
+  revision was added.
+- **The signature stamp is now part of the signature.** It used to be an ordinary annotation
+  drawn next to an invisible signature field, so it could be moved or deleted without touching
+  the signature that was supposed to vouch for it. The stamp is now the signature field's own
+  appearance — covered by the signature, and shown by other viewers as the signature itself.
+  (Flattening it into the page, as such, would have *broken* earlier signatures, since that
+  rewrites already-signed content.)
 
 ## v0.0.5-beta.00 - 2026-07-20
 

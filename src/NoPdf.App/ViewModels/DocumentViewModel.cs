@@ -1245,6 +1245,25 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
         return AnnotationWriter.SaveToBytes(_workingBytes, AnnotationsForSave());
     }
 
+    /// <summary>
+    /// The document without one annotation. Used when certifying: the signature stamp becomes
+    /// the signature field's own appearance, so writing it as a separate annotation as well
+    /// would draw it twice — and the loose copy could be moved or deleted independently of the
+    /// signature that is supposed to guarantee it.
+    /// </summary>
+    public byte[] ExportWithoutAnnotation(PdfAnnotationModel exclude)
+    {
+        FlushFormValues();
+        var keep = AnnotationsForSave().Where(a => !ReferenceEquals(a, exclude)).ToList();
+        return AnnotationWriter.SaveToBytes(_workingBytes, keep);
+    }
+
+    /// <summary>Removes an annotation from the page it lives on, without an undo entry.</summary>
+    public void DiscardAnnotation(PdfAnnotationModel a)
+    {
+        if (a.PageIndex >= 0 && a.PageIndex < Pages.Count) Pages[a.PageIndex].Annotations.Remove(a);
+    }
+
     /// <summary>Writes the document (annotations and form values baked in). Throws if it
     /// can't — a save that fails quietly leaves the user believing their edits are on disk.</summary>
     public async Task SaveAsync(string? destPath = null)
