@@ -17,6 +17,10 @@ public sealed class ViewStateStore
         public string Mode { get; set; } = "";
         /// <summary>Pages across (scroll/full) or rows down (scrollh).</summary>
         public int Pages { get; set; } = 1;
+
+        /// <summary>A label the user gave the tab. Blank = show the file name. Never affects
+        /// the file itself; it only changes what the tab strip reads.</summary>
+        public string Name { get; set; } = "";
     }
 
     private readonly string _path;
@@ -38,6 +42,15 @@ public sealed class ViewStateStore
     {
         var e = Get(file) ?? new Entry();
         e.Zoom = zoom; e.OffsetX = ox; e.OffsetY = oy;
+        _map[file] = e;
+        Save();
+    }
+
+    /// <summary>Records a custom tab label (blank clears it), leaving everything else alone.</summary>
+    public void SetName(string file, string? name)
+    {
+        var e = Get(file) ?? new Entry();
+        e.Name = name ?? "";
         _map[file] = e;
         Save();
     }

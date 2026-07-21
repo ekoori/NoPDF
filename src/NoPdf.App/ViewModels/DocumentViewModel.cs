@@ -29,11 +29,27 @@ public sealed partial class DocumentViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string _filePath;
     [ObservableProperty] private string _title;
 
+    /// <summary>
+    /// A name the user gave this tab, which is not the file's name. Purely a label — renaming a
+    /// tab never touches the file on disk, so it is safe to call a document whatever makes the
+    /// tab strip readable. Null means show the file name.
+    /// </summary>
+    [ObservableProperty] private string? _customTitle;
+
+    partial void OnCustomTitleChanged(string? value) => RefreshTitle();
+
+    /// <summary>The file's own name, ignoring any custom label.</summary>
+    public string FileTitle => IsUntitled ? "Untitled" : Path.GetFileName(FilePath);
+
+    private void RefreshTitle() => Title = string.IsNullOrWhiteSpace(CustomTitle) ? FileTitle : CustomTitle!;
+
     /// <summary>Re-points this tab at the file it was just written to.</summary>
     public void RebindTo(string newPath)
     {
         FilePath = newPath;
-        Title = Path.GetFileName(newPath);
+        // A save-as means the tab IS the new file; a label the user chose still wins, since
+        // they picked it deliberately and nothing about renaming the file changes that.
+        RefreshTitle();
     }
 
     // In-memory PDF the viewer edits (known annotations stripped into the model).

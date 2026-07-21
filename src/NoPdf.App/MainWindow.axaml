@@ -24,7 +24,10 @@
             <Button Classes="tabchip" Classes.active="{Binding IsActive}"
                     Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).SelectTabCommand}"
                     CommandParameter="{Binding}"
-                    PointerPressed="OnTabPointerPressed">
+                    PointerPressed="OnTabPointerPressed"
+                    PointerMoved="OnTabPointerMoved"
+                    PointerReleased="OnTabPointerReleased"
+                    DoubleTapped="OnTabDoubleTapped">
                 <StackPanel Orientation="Horizontal" Spacing="5">
                     <TextBlock Text="{Binding Title}" FontSize="12" VerticalAlignment="Center"
                                MaxWidth="150" TextTrimming="CharacterEllipsis"/>

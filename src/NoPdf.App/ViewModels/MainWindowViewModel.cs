@@ -685,6 +685,43 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (!string.IsNullOrEmpty(msg)) StatusText = msg;
     });
 
+    /// <summary>
+    /// Labels a tab without touching the file. Blank clears the label and the tab goes back to
+    /// showing the file's own name.
+    /// </summary>
+    public string RenameTab(DocumentViewModel? doc, string? name)
+    {
+        doc ??= SelectedTab;
+        if (doc is null) return "No document";
+
+        name = name?.Trim();
+        doc.CustomTitle = string.IsNullOrEmpty(name) ? null : name;
+        if (!doc.IsUntitled) ViewStates.SetName(doc.FilePath, doc.CustomTitle);
+        return string.IsNullOrEmpty(name)
+            ? $"Tab name cleared — showing {doc.FileTitle}"
+            : $"Tab renamed to \"{name}\" (the file is still {doc.FileTitle})";
+    }
+
+    /// <summary>
+    /// Moves a tab within the strip. The session stores tabs in their displayed order, so the
+    /// new arrangement is remembered by saving it.
+    /// </summary>
+    public string MoveTab(DocumentViewModel? doc, int toIndex)
+    {
+        doc ??= SelectedTab;
+        if (doc is null) return "No document";
+        int from = Tabs.IndexOf(doc);
+        if (from < 0) return "No document";
+
+        int to = Math.Clamp(toIndex, 0, Tabs.Count - 1);
+        if (to == from) return $"Already at position {to + 1}";
+
+        Tabs.Move(from, to);
+        SelectedTab = doc;              // Move can disturb selection; keep the tab you moved
+        SaveSession();
+        return $"Moved {doc.Title} to position {to + 1} of {Tabs.Count}";
+    }
+
     /// <summary>Applies config/presets/sinks to a tab (before or after its content loads).</summary>
     private void ConfigureDoc(DocumentViewModel doc, string path)
     {
@@ -705,6 +742,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 // restoring doesn't write straight back.
                 if (!string.IsNullOrEmpty(saved.Mode)) doc.SetView(saved.Mode, saved.Pages);
             }
+            if (!string.IsNullOrWhiteSpace(saved?.Name)) doc.CustomTitle = saved!.Name;
             doc.ViewStateSink = (z, x, y) => ViewStates.Set(path, z, x, y);
             doc.ViewModeSink = (m, n) => ViewStates.SetMode(path, m, n);
             doc.RecoverBytes = _autosave.TryLoad(path); // unsaved edits from a previous run

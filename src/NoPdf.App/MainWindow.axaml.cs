@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
@@ -460,14 +462,73 @@ public partial class MainWindow : Window
         return files.Select(f => f.TryGetLocalPath()).FirstOrDefault(p => !string.IsNullOrEmpty(p));
     }
 
+    /// <summary>The tab a drag started on, and whether it has moved far enough to count.</summary>
+    private DocumentViewModel? _dragTab;
+    private Point _dragOrigin;
+    private bool _dragging;
+
     private void OnTabPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (e.GetCurrentPoint(null).Properties.IsMiddleButtonPressed
-            && (sender as Control)?.DataContext is DocumentViewModel doc)
+        if ((sender as Control)?.DataContext is not DocumentViewModel doc) return;
+
+        if (e.GetCurrentPoint(null).Properties.IsMiddleButtonPressed)
         {
             Vm.CloseTabCommand.Execute(doc);
             e.Handled = true;
+            return;
         }
+
+        if (e.GetCurrentPoint(null).Properties.IsLeftButtonPressed)
+        {
+            // Remember where the press landed; a drag only begins once it moves, so a plain
+            // click still selects the tab as it always did.
+            _dragTab = doc;
+            _dragOrigin = e.GetPosition(this);
+            _dragging = false;
+        }
+    }
+
+    private void OnTabPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_dragTab is null || !e.GetCurrentPoint(null).Properties.IsLeftButtonPressed) return;
+
+        var pos = e.GetPosition(this);
+        if (!_dragging)
+        {
+            // A few pixels of slop, so a shaky click is not a reorder.
+            if (Math.Abs(pos.X - _dragOrigin.X) < 6 && Math.Abs(pos.Y - _dragOrigin.Y) < 6) return;
+            _dragging = true;
+        }
+
+        // Drop onto whichever tab is under the pointer.
+        if ((e.Source as Control)?.FindAncestorOfType<Button>(includeSelf: true)?.DataContext
+            is DocumentViewModel over && !ReferenceEquals(over, _dragTab))
+        {
+            int to = Vm.Tabs.IndexOf(over);
+            if (to >= 0) Vm.MoveTab(_dragTab, to);
+        }
+    }
+
+    private void OnTabPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        _dragTab = null;
+        _dragging = false;
+    }
+
+    /// <summary>
+    /// Double-clicking a tab renames it — the tab only, never the file. Rather than a modal,
+    /// this pre-fills the command line, so the edit happens where every other edit in noPDF
+    /// happens and Esc cancels it the same way.
+    /// </summary>
+    private void OnTabDoubleTapped(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not DocumentViewModel doc) return;
+        e.Handled = true;
+        _dragTab = null;
+        _dragging = false;
+
+        Vm.SelectedTab = doc;
+        Vm.CommandBar.Open(":", "tabname " + (doc.CustomTitle ?? doc.FileTitle));
     }
 
     private void OnAnnotationItemClick(object? sender, PointerPressedEventArgs e)

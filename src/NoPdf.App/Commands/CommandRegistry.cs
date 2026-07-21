@@ -84,6 +84,9 @@ public sealed class CommandRegistry
             ["insert"] = Insert,
             ["merge"] = Merge,
             ["newfile"] = (_, _) => Msg(_main.NewFile()),
+            ["tabname"] = (_, rest) => Msg(_main.RenameTab(null, rest)),
+            ["tabrename"] = (_, rest) => Msg(_main.RenameTab(null, rest)),
+            ["tabmove"] = TabMove,
             ["newpage"] = NewPage,
             ["flatten"] = (_, _) => Msg(Flatten()),
             ["undo"] = (_, _) => { _main.Undo(); return Msg(null); },
@@ -446,6 +449,31 @@ public sealed class CommandRegistry
         int at = args.Length > 1 && int.TryParse(args[1], out int a) ? a - 1 : doc.CurrentPage;
         doc.InsertFile(path, at);
         return $"Inserted {Path.GetFileName(path)}";
+    }
+
+    /// <summary>
+    /// Moves the current tab: a position (1-based), or left/right/first/last to nudge it.
+    /// </summary>
+    private Task<string?> TabMove(string[] args, string rest)
+    {
+        var doc = _main.SelectedTab;
+        if (doc is null) return Msg("No document");
+        int current = _main.Tabs.IndexOf(doc);
+        string where = rest.Trim().ToLowerInvariant();
+
+        int target = where switch
+        {
+            "left" or "prev" or "-" => current - 1,
+            "right" or "next" or "+" => current + 1,
+            "first" or "start" => 0,
+            "last" or "end" => _main.Tabs.Count - 1,
+            _ when int.TryParse(where, out int n) => n - 1,       // 1-based, as shown
+            _ => int.MinValue,
+        };
+
+        if (target == int.MinValue)
+            return Msg("Usage: :tabmove <position|left|right|first|last>");
+        return Msg(_main.MoveTab(doc, target));
     }
 
     /// <summary>

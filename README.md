@@ -129,7 +129,7 @@ The highlights:
 
 | Area | Commands |
 |------|----------|
-| **Files / tabs** | `open` (`o`), `newfile`, `O`/`tabnew`, `tabnext`, `tabprev`, `tabclose`, `close`, `quit`, `reopen`, `reload`, `copypath` |
+| **Files / tabs** | `open` (`o`), `newfile`, `tabname`, `tabmove`, `O`/`tabnew`, `tabnext`, `tabprev`, `tabclose`, `close`, `quit`, `reopen`, `reload`, `copypath` |
 | **Save / print** | `save` (`w`) `[path]`, `saveas [path]`, `print [preset] [range]`, `printdialog`, `printpreset` |
 | **Sessions** | `session save\|load\|del\|list <name>` |
 | **Navigate** | `page <n\|first\|last\|next\|prev>`, `scrollup`/`scrolldown`/`scrollleft`/`scrollright`, `scrollpageup`/`scrollpagedown`, `hint` (`f`) |

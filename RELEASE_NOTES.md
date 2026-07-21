@@ -7,6 +7,12 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
 ## Unreleased (0.0.5 line)
 
+- **Tabs can be reordered and renamed.** Drag a tab along the strip to move it, or use
+  `:tabmove <position|left|right|first|last>`. Double-click a tab to rename it — that opens the
+  command line pre-filled, so `Esc` cancels as usual — or use `:tabname <name>` (blank clears
+  it). A tab name is only a label: **the file on disk is never renamed**, and the tab keeps
+  showing your label even after a save-as. Both the order and the names survive a restart.
+
 - **Signing no longer destroys the signatures already on a document.** Signing used to re-save
   the whole file, which rewrites the bytes an earlier signature was computed over — so the
   moment a second person signed, everyone before them showed as *"INVALID — the document was
