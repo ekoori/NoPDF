@@ -30,7 +30,10 @@ class Program
         }
 
         // If another window is already open, hand our file args to it and exit.
-        if (SingleInstance.TryForward(args)) return;
+        // A second copy normally hands its files to the running one and exits; the escape
+        // hatch lets a developer run an isolated instance alongside it.
+        if (Environment.GetEnvironmentVariable("NOPDF_NO_SINGLE_INSTANCE") is null
+            && SingleInstance.TryForward(args)) return;
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 

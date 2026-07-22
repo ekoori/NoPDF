@@ -7,14 +7,15 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
 ## Unreleased (0.0.5 line)
 
-- **Opening a document no longer flashes every page squished into a thin line.** The tab is
-  now shown before its content finishes loading (so a slow open is visible), which meant the
-  layout ran against an empty document and sized every page slot to nothing; the pages then
-  dropped into that one-pixel slot until the next zoom or resize. The layout now waits for the
-  pages and applies once they arrive.
-- **In select mode, clicking the gutter around a page does nothing.** A click in the margin
-  between or beside pages used to yank the current page to whichever one owned that gutter.
-  Only a click on the page itself counts now.
+- **Opening a document no longer flashes every page squished into a thin line.** Restoring a
+  saved view mode ran the panel layout before the pages had loaded, sizing every page slot to
+  one pixel; the pages then dropped into that slot until a zoom or resize. The layout now skips
+  while there are no pages and, when they arrive, sets the zoom before building the panels so
+  the slot is the right size on the first pass — no squished frame.
+- **Clicking anywhere but a page no longer scrolls the view.** The pages sit in a list that
+  auto-scrolled its selected item into view, so clicking a page (or the gutter around one)
+  jerked the document to bring that page into view. That auto-scroll is off; clicking selects
+  nothing and moves nothing.
 
 - **Tabs can be reordered and renamed.** Drag a tab along the strip to move it, or use
   `:tabmove <position|left|right|first|last>`. Double-click a tab to rename it — that opens the

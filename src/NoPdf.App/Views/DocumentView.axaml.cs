@@ -225,22 +225,22 @@ public partial class DocumentView : UserControl
         if (first) _vm.InitialView = null;
         int keep = _vm.CurrentPage;
 
-        RelayoutPanels();   // this document's mode — not the last tab's
+        // Fix the zoom BEFORE building the panels. RelayoutPanels and UpdateWrapPanel size the
+        // page slot from the current zoom, so if the zoom is set afterwards the slot is built
+        // at the wrong size and corrected a frame later — the visible "squished then snaps"
+        // flash. The viewport is already measured here (the tab has been shown), so the fit is
+        // valid now.
+        var sv = Scroll;
+        bool modeOwnsZoom = _vm.ViewMode != PageViewMode.Scroll || _vm.PagesPerRow > 1;
+        if (saved is { } v) _vm.SetZoom(v.Zoom);
+        else if (modeOwnsZoom && sv is { Viewport.Width: > 0, Viewport.Height: > 0 } && !_vm.ManualZoom)
+            _vm.FitForView(sv.Viewport.Width, sv.Viewport.Height, keep);
+        // else: plain scroll with no saved position — keep the zoom, go to the top.
 
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (_vm is null) { _applyingView = false; return; }
-            var sv = Scroll;
-            bool modeOwnsZoom = _vm.ViewMode != PageViewMode.Scroll || _vm.PagesPerRow > 1;
 
-            if (saved is { } v) _vm.SetZoom(v.Zoom);
-            else if (modeOwnsZoom && sv is { Viewport.Width: > 0, Viewport.Height: > 0 } && !_vm.ManualZoom)
-                _vm.FitForView(sv.Viewport.Width, sv.Viewport.Height, keep);
-            // else: plain scroll with no saved position — keep the zoom, go to the top.
-
-            UpdateWrapPanel(); // panels are sized off the zoom we just set
-            RestoreOffset(saved is { } v2 ? new Vector(v2.OffsetX, v2.OffsetY) : default);
-        }, DispatcherPriority.Background);
+        RelayoutPanels();   // this document's mode and now-correct zoom
+        UpdateWrapPanel();  // size the wrap panel to the same
+        RestoreOffset(saved is { } v2 ? new Vector(v2.OffsetX, v2.OffsetY) : default);
     }
 
     /// <summary>
@@ -325,7 +325,9 @@ public partial class DocumentView : UserControl
     /// horizontal-scroll modes).</summary>
     private void UpdateWrapPanel()
     {
-        if (_vm is null) return;
+        // Sizing the slot from RowHeight()/ColWidth() with no page to measure collapses every
+        // page to a one-pixel line. Never do it; the real sizing happens once pages exist.
+        if (_vm is null || _vm.Pages.Count == 0) return;
         var panel = PageList.GetVisualDescendants().OfType<WrapPanel>().FirstOrDefault();
         if (panel is null) return;
         int n = Math.Max(1, _vm.PagesPerRow);
@@ -357,6 +359,11 @@ public partial class DocumentView : UserControl
     private void OnViewModeChanged()
     {
         if (_vm is null) return;
+        // The mode is restored (SetView) before the document's pages have loaded, so this can
+        // run with nothing to measure — RowHeight()/ColWidth() fall back to 1 and the panel
+        // collapses every page to a one-pixel line. Skip; ApplyViewForDoc lays the mode out
+        // once the pages arrive.
+        if (_vm.Pages.Count == 0) return;
         // The relayout below resets the scroll offset, which would otherwise drag the
         // current page back to 1 before the refit reads it.
         int keep = _vm.CurrentPage;
@@ -482,9 +489,11 @@ public partial class DocumentView : UserControl
         // The pages have just appeared (the tab was shown before its content loaded). The
         // initial layout couldn't run against an empty document, so run it now that there is
         // something to fit and size the panel to.
-        else if (e.PropertyName == nameof(DocumentViewModel.PageCount)
-                 && _vm is { PendingInitialView: true } && _vm.Pages.Count > 0)
-            Dispatcher.UIThread.Post(ApplyViewForDoc, DispatcherPriority.Loaded);
+        else if (e.PropertyName == nameof(DocumentViewModel.PageCount))
+        {
+            if (_vm is { PendingInitialView: true } && _vm.Pages.Count > 0)
+                Dispatcher.UIThread.Post(ApplyViewForDoc, DispatcherPriority.Loaded);
+        }
     }
 
     private void UpdateCursor()
