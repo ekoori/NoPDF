@@ -7,6 +7,15 @@ publishes `v0.0.X-beta.00` to GitHub. Newest first.
 
 ## Unreleased (0.0.5 line)
 
+- **Opening a document no longer flashes every page squished into a thin line.** The tab is
+  now shown before its content finishes loading (so a slow open is visible), which meant the
+  layout ran against an empty document and sized every page slot to nothing; the pages then
+  dropped into that one-pixel slot until the next zoom or resize. The layout now waits for the
+  pages and applies once they arrive.
+- **In select mode, clicking the gutter around a page does nothing.** A click in the margin
+  between or beside pages used to yank the current page to whichever one owned that gutter.
+  Only a click on the page itself counts now.
+
 - **Tabs can be reordered and renamed.** Drag a tab along the strip to move it, or use
   `:tabmove <position|left|right|first|last>`. Double-click a tab to rename it — that opens the
   command line pre-filled, so `Esc` cancels as usual — or use `:tabname <name>` (blank clears

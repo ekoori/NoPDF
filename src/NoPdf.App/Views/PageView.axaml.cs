@@ -142,13 +142,19 @@ public partial class PageView : UserControl
         var props = e.GetCurrentPoint(this).Properties;
         if (!props.IsLeftButtonPressed) return;
 
+        // The control extends past the page itself by PageArea's margin (the gutter between
+        // pages). A press out there is on empty space, not the page — ignore it entirely, so
+        // clicking the gutter doesn't yank the current page to whichever one owns the gutter.
+        var pos = AreaPos(e);
+        if (pos.X < 0 || pos.Y < 0 || pos.X > PageArea.Bounds.Width || pos.Y > PageArea.Bounds.Height)
+            return;
+
         Focus();
         // Clicking a page makes it the current one. In a multi-page-across view the scroll
         // position alone can't say which page of a row you mean, so this is how you pick the
         // one that commands like :newpage act on.
         _current.Owner.FocusPage(_current.PageNumber);
 
-        var pos = AreaPos(e);
         var page = ToPage(pos);
         var tool = Tool;
 

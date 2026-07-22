@@ -205,6 +205,15 @@ public partial class DocumentView : UserControl
     private void ApplyViewForDoc()
     {
         if (_vm is null) { _applyingView = false; return; }
+
+        // Nothing can be laid out until the document has pages. The tab is shown before its
+        // content finishes loading (so a slow open is visible), so this can run first against
+        // an empty document — and sizing the wrap panel to no pages is exactly what left every
+        // page squished into a one-pixel line until the next resize. Wait; OnVmPropertyChanged
+        // re-runs this the moment the pages arrive. Stay guarded meanwhile so the ItemsSource
+        // rebind's scroll reset doesn't overwrite the remembered position.
+        if (_vm.Pages.Count == 0) { _applyingView = true; return; }
+
         _applyingView = true;   // ignore the scroll churn the relayout is about to cause
         bool first = _vm.PendingInitialView;
         _vm.PendingInitialView = false;
@@ -470,6 +479,12 @@ public partial class DocumentView : UserControl
         // overlapping the pages.
         else if (e.PropertyName == nameof(DocumentViewModel.ZoomPercent))
             Dispatcher.UIThread.Post(UpdateWrapPanel, DispatcherPriority.Background);
+        // The pages have just appeared (the tab was shown before its content loaded). The
+        // initial layout couldn't run against an empty document, so run it now that there is
+        // something to fit and size the panel to.
+        else if (e.PropertyName == nameof(DocumentViewModel.PageCount)
+                 && _vm is { PendingInitialView: true } && _vm.Pages.Count > 0)
+            Dispatcher.UIThread.Post(ApplyViewForDoc, DispatcherPriority.Loaded);
     }
 
     private void UpdateCursor()
